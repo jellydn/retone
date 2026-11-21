@@ -1,3 +1,11 @@
+## Retone 0.1.0-beta.4 — 2026-11-21
+
+- Fix: Replace was refused in every app with "another app is in front". The check before the paste asked macOS for the focused app while the Retone popup had focus. It now checks the field in the target app, and the live frontmost-app check is the last check before ⌘V.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.3 — 2026-11-21
 
 The v0.1.0-beta.2 tag failed to build and was never published, so this release carries its changes.

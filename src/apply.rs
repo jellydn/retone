@@ -26,11 +26,7 @@ fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
     let (Some(pid), Some(target)) = (capture.pid, capture.target.as_ref()) else {
         return Err("Retone cannot check where the text came from".into());
     };
-    if screens::frontmost_pid() != Some(pid) {
-        spike!("replace check failed: frontmost pid changed");
-        return Err("the selection changed".into());
-    }
-    if let Err(reason) = target.still_matches(pid, &capture.captured.text) {
+    if let Err(reason) = target.still_matches(&capture.captured.text) {
         spike!("replace check failed: {reason}");
         return Err("the selection changed".into());
     }
@@ -48,6 +44,13 @@ fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
         return Err("a modifier key is held down".into());
     }
     let written = board.write_transient_text(rewrite);
+    // Last check before ⌘V, so an app switch during the AX re-check or the modifier wait is
+    // still caught. It narrows the gap; it cannot make the check and the paste atomic.
+    if screens::frontmost_pid() != Some(pid) {
+        board.restore_if_unchanged(&snapshot, written);
+        spike!("replace check failed: frontmost pid changed");
+        return Err("the selection changed".into());
+    }
     if !events::post_paste(pid) {
         board.restore_if_unchanged(&snapshot, written);
         return Err("Retone could not send ⌘V".into());
