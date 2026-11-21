@@ -144,6 +144,10 @@ Retone asks for consent the first time it sends text to a provider and model, an
 | Pi       | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2.                                                                                                                |
 | OpenCode | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                                                                                                           |
 
+### Choosing a local model
+
+Use a 3B model or larger, such as `qwen2.5:3b` (about 2 GB). In Retone's style eval (`retone --eval-styles`), `qwen2.5:0.5b` often gave almost the same text for every style, did not shorten text for Concise, and sometimes dropped facts. `qwen2.5:3b` and `qwen2.5:7b` passed every check through Ollama and llama.cpp.
+
 ### Local AI on your LAN or Tailscale
 
 By default, Retone sends text only to a server on this Mac (`127.0.0.1`, `localhost`, `::1`). To use a server on another machine, turn on **Settings → Provider → Allow LAN and Tailscale servers**, then enter its address, for example `http://192.168.1.20:11434/v1`, `http://100.101.1.2:11434/v1` or `https://box.tailnet.ts.net/v1`.

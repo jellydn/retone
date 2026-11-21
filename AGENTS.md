@@ -16,6 +16,7 @@ scripts/bundle.sh                 # dev bundle: target/bundle/Retone Dev.app
 scripts/bundle.sh --release       # release bundle: Retone.app
 sh scripts/release.sh             # DMG, ZIP, SHA256SUMS in target/release/assets
 target/debug/retone --list-scenes # headless scenes for screenshots
+target/debug/retone --eval-styles --model qwen2.5:3b [--endpoint URL] # style prompt eval (prints sample text)
 target/debug/retone [--window settings] --scene NAME --snap out.png --theme dark
 ```
 
