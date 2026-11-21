@@ -1,3 +1,15 @@
+## Retone 0.1.0-beta.6 — 2026-11-21
+
+- New Settings design: a sidebar with General, Provider, Styles and Privacy. Each page is one card of rows with an icon, a short help line and the control on the right, with rarely used settings under **Advanced**. The sidebar footer shows **What's new**, the version, and how this copy updates.
+- **Launch at login** switch in **Settings → General**. macOS keeps this setting (System Settings → General → Login Items).
+- Accessibility status and **Open Settings** are now in **Settings → General** (the Permissions page is gone).
+- Address and Custom style open their own page; provider, default style and theme are dropdowns.
+- Rune UI update.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.5 — 2026-11-21
 
 - Fix: Replace works in Slack and other Chromium and Electron apps. They report no focused field while the Retone popup is open, so Retone now reads the captured field again. It replaces only when that field still has focus and still holds the same selection.
