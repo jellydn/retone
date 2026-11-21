@@ -164,3 +164,36 @@ fn a_style_change_rewrites_the_same_original_with_the_new_style() {
         "no CancelRequest when nothing is loading: {out:?}"
     );
 }
+
+#[test]
+fn a_provider_change_asks_consent_first_and_drops_the_old_answer() {
+    let mut flow = Flow::new(Style::Clear);
+    let first = start(&mut flow, "text");
+    flow.step(Event::ChangeStyle(Style::Technical));
+    let loading = match &flow.state {
+        State::Previewing { attempt, .. } => *attempt,
+        other => panic!("expected Previewing, got {other:?}"),
+    };
+    // Switched while loading to a provider without consent: stop the old request, send nothing.
+    let out = effects(flow.step(Event::ProviderChanged { consented: false }));
+    assert_eq!(out, vec![Effect::CancelRequest]);
+    assert!(matches!(&flow.state, State::AwaitingConsent { style: Style::Technical, .. }));
+    flow.step(Event::Answer { attempt: loading, result: Ok("from the old provider".into()) });
+    flow.step(Event::Answer { attempt: first, result: Ok("older still".into()) });
+    assert!(matches!(&flow.state, State::AwaitingConsent { .. }), "late answers must not show");
+
+    let out = effects(flow.step(Event::ConsentGiven));
+    assert!(
+        matches!(&out[..], [Effect::Request { text, style: Style::Technical, .. }, Effect::SaveConsent] if text == "text")
+    );
+}
+
+#[test]
+fn a_provider_change_with_consent_rewrites_the_same_text_and_style_again() {
+    let mut flow = Flow::new(Style::Concise);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Ok("Rewrite".into()) });
+    let out = effects(flow.step(Event::ProviderChanged { consented: true }));
+    assert!(matches!(&out[..], [Effect::Request { text, style: Style::Concise, .. }] if text == "text"), "{out:?}");
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Loading, .. }));
+}

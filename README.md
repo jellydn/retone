@@ -49,6 +49,7 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 - ✍️ **Styles**: Clear, Concise, Professional, Technical, or your own instruction; press a number key to switch
 - 👀 **Preview first**: see the rewrite before anything changes; Enter replaces, ⌘C copies, ⌘R retries, Esc cancels
 - 🛡️ **Safe replace**: Retone replaces only when the same app, field and selection are still there; on failure or cancel nothing changes, and your clipboard comes back
+- 🔀 **Switch provider in the popup**: click the provider label or press ⌘P to pick another provider or local model; Retone keeps the choice
 - 🏠 **Local AI**: any OpenAI-compatible server on loopback (`127.0.0.1`, `localhost`, `::1`)
 - 🧰 **CLI providers**: Pi and OpenCode, run with no sessions, no tools and no history
 - 🔒 **No history**: the 2,000-character input limit, no text in logs, settings store no text
@@ -118,6 +119,7 @@ Without the permission, Retone works in **clipboard mode**: copy the text first,
 2. Press your hotkey (or choose **Rewrite Selection** from the Retone menu-bar item).
 3. Pick a style with a number key, and wait for the preview.
 4. **Enter** replaces the selection, **⌘C** copies the rewrite, **⌘R** tries again, **Esc** cancels.
+5. To use another provider or model, press **⌘P** (or click the provider label at the top right), choose with **↑/↓** or a number, and press **Enter**. Retone saves the choice for the next rewrite and asks for consent first if that provider and model are new.
 
 Retone does not run when Retone itself is in front, and refuses selections longer than 2,000 characters.
 

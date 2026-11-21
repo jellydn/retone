@@ -95,6 +95,39 @@ impl Config {
     }
 }
 
+impl Config {
+    /// What the popup's provider list offers: each provider that is valid with its saved model,
+    /// and the other models the local endpoint listed next to the local one, so each provider's
+    /// rows stay together. A model ID is never typed in the popup.
+    pub fn choices(&self, local_models: &[String]) -> Vec<Provider> {
+        let mut all: Vec<Provider> = [Kind::Local, Kind::Pi, Kind::OpenCode]
+            .into_iter()
+            .filter_map(|kind| Config { provider: Some(kind), ..self.clone() }.provider().ok())
+            .collect();
+        if let Ok(endpoint) = local::validate_endpoint(&self.local_endpoint) {
+            for model in local_models.iter().map(|m| m.trim()).filter(|m| !m.is_empty()) {
+                let listed = Provider::Local { endpoint: endpoint.clone(), model: model.to_string() };
+                if !all.contains(&listed) {
+                    let after_local = all.iter().rposition(|p| p.kind() == Kind::Local).map_or(0, |i| i + 1);
+                    all.insert(after_local, listed);
+                }
+            }
+        }
+        all
+    }
+
+    /// Makes `provider` the saved choice, with its model, as Settings would save it.
+    pub fn choose(&mut self, provider: &Provider) {
+        self.provider = Some(provider.kind());
+        let model = provider.model().to_string();
+        match provider {
+            Provider::Local { .. } => self.local_model = model,
+            Provider::Pi { .. } => self.pi_model = model,
+            Provider::OpenCode { .. } => self.opencode_model = model,
+        }
+    }
+}
+
 fn exact_model(model: &str, name: &str) -> Result<String, String> {
     let model = model.trim();
     if model.is_empty() {
@@ -133,6 +166,37 @@ mod tests {
         assert_eq!(loaded, config);
         assert_eq!(loaded.style(), Style::Custom("Make it friendly.".into()));
         assert_eq!(loaded.provider(), Ok(Provider::OpenCode { model: "opencode/beam-free".into() }));
+    }
+
+    #[test]
+    fn the_popup_offers_valid_providers_and_listed_local_models_once() {
+        let config = Config {
+            provider: Some(Kind::Local),
+            local_endpoint: local::OLLAMA.into(),
+            local_model: "qwen2.5:0.5b".into(),
+            pi_model: "".into(),
+            opencode_model: "opencode/beam-free".into(),
+            ..Config::default()
+        };
+        let listed = ["llama3.2:1b".to_string(), "qwen2.5:0.5b".to_string(), " ".to_string()];
+        let choices = config.choices(&listed);
+        let models: Vec<(Kind, &str)> = choices.iter().map(|p| (p.kind(), p.model())).collect();
+        // Pi has no model, so it is not offered; the saved local model is not listed twice.
+        assert_eq!(
+            models,
+            [(Kind::Local, "qwen2.5:0.5b"), (Kind::Local, "llama3.2:1b"), (Kind::OpenCode, "opencode/beam-free")]
+        );
+    }
+
+    #[test]
+    fn choosing_saves_the_kind_and_only_that_kinds_model() {
+        let mut config =
+            Config { provider: Some(Kind::Pi), pi_model: "p".into(), local_model: "a".into(), ..Config::default() };
+        config.choose(&Provider::Local { endpoint: local::OLLAMA.into(), model: "b".into() });
+        assert_eq!(
+            (config.provider, config.local_model.as_str(), config.pi_model.as_str()),
+            (Some(Kind::Local), "b", "p")
+        );
     }
 
     #[test]

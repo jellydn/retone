@@ -32,9 +32,20 @@ pub struct Popup {
     pub clipboard_only: bool,
     /// Set after the runtime guard saw a CLI write files; shown above the kept result.
     pub adapter_warning: Option<String>,
+    /// The provider list, open over the current state (⌘P or a click on the header label).
+    pub picker: Option<Picker>,
     request: Latest<(Attempt, Outcome)>,
+    /// Models the local endpoint lists, fetched when the provider list opens.
+    local_models: Latest<Result<Vec<String>, String>>,
     cancel: Cancel,
     links: Option<Links>,
+}
+
+pub struct Picker {
+    pub choices: Vec<Provider>,
+    pub selected: usize,
+    /// True until the local endpoint answered with its model list.
+    pub listing: bool,
 }
 
 /// Handles and services that exist only once the app runs (none in headless scenes' setup).
@@ -66,7 +77,9 @@ impl Default for Popup {
             provider_problem: None,
             clipboard_only: false,
             adapter_warning: None,
+            picker: None,
             request: Latest::default(),
+            local_models: Latest::default(),
             cancel: Cancel::default(),
             links: None,
         }
@@ -87,7 +100,8 @@ impl Popup {
     }
 
     pub fn set_waker(&mut self, waker: rune::Waker) {
-        self.request.set_waker(waker);
+        self.request.set_waker(waker.clone());
+        self.local_models.set_waker(waker);
     }
 
     /// The user's global shortcut, or the menu item Rewrite Selection.
@@ -107,6 +121,7 @@ impl Popup {
         self.provider_problem = checked.as_ref().err().cloned();
         self.provider = checked.ok();
         self.adapter_warning = None;
+        self.picker = None;
         self.flow.default_style = self.config.style();
         let effects = self.flow.step(Event::Hotkey { has_provider: self.provider.is_some() });
         self.run(effects, tx);
@@ -137,9 +152,87 @@ impl Popup {
         }
     }
 
-    /// Lands a provider answer; true when the view changed.
+    /// Opens the provider list, or closes it when it is open.
+    pub fn toggle_picker(&mut self) {
+        if self.picker.take().is_some() {
+            return;
+        }
+        // Only while there is something to rewrite or a question to answer.
+        if !matches!(self.flow.state, State::Previewing { .. } | State::AwaitingConsent { .. }) {
+            return;
+        }
+        // Headless scenes have no links: they use the scene's config and never touch the network.
+        if let Some(links) = self.links.as_ref() {
+            self.config = links.shared.config();
+        }
+        let choices = self.offered(&[]);
+        let selected = choices.iter().position(|c| Some(c) == self.provider.as_ref()).unwrap_or(0);
+        let listing =
+            self.links.is_some() && crate::provider::local::validate_endpoint(&self.config.local_endpoint).is_ok();
+        if listing {
+            let endpoint = self.config.local_endpoint.clone();
+            self.local_models.request(endpoint, |endpoint| provider::local::list_models(&endpoint));
+        }
+        self.picker = Some(Picker { choices, selected, listing });
+    }
+
+    /// The choices without adapters the runtime guard turned off.
+    fn offered(&self, local_models: &[String]) -> Vec<Provider> {
+        let mut choices = self.config.choices(local_models);
+        if let Some(links) = self.links.as_ref() {
+            let prefs = links.shared.prefs();
+            choices.retain(|c| consent::disabled_reason(&prefs, c.kind()).is_none());
+        }
+        choices
+    }
+
+    pub fn move_selection(&mut self, down: bool) {
+        if let Some(picker) = self.picker.as_mut().filter(|p| !p.choices.is_empty()) {
+            let n = picker.choices.len();
+            picker.selected = if down { (picker.selected + 1) % n } else { (picker.selected + n - 1) % n };
+        }
+    }
+
+    /// Saves the choice for the next rewrites too, then reruns this one, or asks for consent
+    /// first when this provider and model do not have it yet.
+    pub fn choose(&mut self, index: usize, tx: &mut Tx) {
+        let Some(chosen) = self.picker.take().and_then(|p| p.choices.into_iter().nth(index)) else { return };
+        if self.provider.as_ref() == Some(&chosen) {
+            return;
+        }
+        self.config.choose(&chosen);
+        let mut consented = false;
+        if let Some(links) = self.links.as_ref() {
+            // A failed write keeps the choice for this rewrite; Settings shows the saved one.
+            self.config.save(&mut links.shared.prefs()).ok();
+            links.settings.update(|settings, _| settings.reload());
+            consented = consent::has_consent(&links.shared.prefs(), &chosen);
+        }
+        self.provider = Some(chosen);
+        self.provider_problem = None;
+        self.adapter_warning = None;
+        self.step(Event::ProviderChanged { consented }, tx);
+    }
+
+    /// Adds the listed local models to the open list, keeping the highlighted row.
+    fn add_local_models(&mut self, models: &[String]) -> bool {
+        let choices = self.offered(models);
+        let Some(picker) = self.picker.as_mut() else { return false };
+        let highlighted = picker.choices.get(picker.selected).cloned();
+        picker.selected = highlighted.and_then(|c| choices.iter().position(|x| *x == c)).unwrap_or(0);
+        picker.choices = choices;
+        picker.listing = false;
+        true
+    }
+
+    /// Lands a provider answer or the local model list; true when the view changed.
     pub fn poll(&mut self, tx: &mut Tx) -> bool {
-        let Some((attempt, outcome)) = self.request.take() else { return false };
+        let mut listed = false;
+        if let Some(models) = self.local_models.take() {
+            // An endpoint that cannot list models leaves the saved choices as they are.
+            listed = self.add_local_models(&models.unwrap_or_default());
+        }
+        let Some((attempt, outcome)) = self.request.take() else { return listed };
         if let (Some(folder), Some(provider), Some(links)) = (&outcome.wrote_files, &self.provider, &self.links) {
             let home = links.env.as_ref().map(|env| env.home.display().to_string()).unwrap_or_default();
             let folder = folder.display().to_string().replacen(&home, "~", 1);
@@ -249,7 +342,16 @@ impl Popup {
 /// Popup keys: ⏎ confirms what the popup offers, Esc cancels, ⌘C copies, ⌘R retries, 1–5 pick
 /// a style.
 pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
+    if p.picker.is_some() {
+        picker_key(p, ev, tx);
+        // The list holds the keys while open, so ⏎ or ⌘C cannot act on the rewrite behind it.
+        return true;
+    }
     let event = match &ev.key {
+        Key::Command('p') => {
+            p.toggle_picker();
+            return true;
+        }
         Key::Escape => Event::Cancel,
         Key::Enter => match p.flow.state {
             State::AwaitingConsent { .. } => Event::ConsentGiven,
@@ -266,6 +368,21 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
     };
     p.step(event, tx);
     true
+}
+
+/// Provider list keys: ↑/↓ move, ⏎ uses the selection, 1–9 use that row, ⎋ or ⌘P close.
+fn picker_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) {
+    match &ev.key {
+        Key::Up => p.move_selection(false),
+        Key::Down | Key::Tab => p.move_selection(true),
+        Key::Enter => {
+            let selected = p.picker.as_ref().map_or(0, |picker| picker.selected);
+            p.choose(selected, tx);
+        }
+        Key::Escape | Key::Command('p') => p.picker = None,
+        Key::Text(digit) if !ev.mods.cmd => p.choose(digit_index(digit), tx),
+        _ => {}
+    }
 }
 
 fn digit_index(text: &str) -> usize {

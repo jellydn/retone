@@ -43,7 +43,7 @@ pub enum HotkeyTest {
 }
 
 /// Popup keys a global shortcut must not take, or the popup could not use them.
-const POPUP_CHORDS: [&str; 2] = ["super+c", "super+r"];
+const POPUP_CHORDS: [&str; 3] = ["super+c", "super+r", "super+p"];
 
 pub struct SettingsUi {
     pub page: Page,
@@ -196,6 +196,15 @@ impl SettingsUi {
             self.save();
         }
         self.provider_status = Some(checked);
+    }
+
+    /// The popup saved another provider: show the saved choice and its model.
+    pub fn reload(&mut self) {
+        self.config = self.shared.config();
+        self.provider_choice = self.config.provider;
+        self.local_model = TextEdit::new(&self.config.local_model);
+        self.pi_model = TextEdit::new(&self.config.pi_model);
+        self.opencode_model = TextEdit::new(&self.config.opencode_model);
     }
 
     pub fn list_local_models(&mut self) {
