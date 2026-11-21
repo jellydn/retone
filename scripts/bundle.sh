@@ -3,33 +3,60 @@
 # so they never share an Accessibility grant or prefs with a release.
 #
 #   scripts/bundle.sh                 # dev: "Retone Dev.app", io.github.jellydn.retone.dev
+#   scripts/bundle.sh --release       # release: "Retone.app", io.github.jellydn.retone
 #   scripts/bundle.sh --out DIR       # where the .app goes (default: target/bundle)
 #
-# Release signing with the "Retone Release Signing" certificate and Sparkle embedding come
-# with the release workflow; this script refuses to pretend it does them.
+# Release options, from the environment:
+#   SPARKLE_FRAMEWORK   path to Sparkle.framework; embedded only together with SPARKLE_PUBLIC_KEY
+#   SPARKLE_PUBLIC_KEY  the EdDSA public key; without it the app has no automatic updates,
+#                       because Sparkle must never install an update it cannot verify
+#   SIGNING_IDENTITY    codesign identity; default "Retone Release Signing" when the keychain
+#                       has it, otherwise ad hoc
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 out="$root/target/bundle"
+release=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) out=$2; shift 2 ;;
+    --release) release=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-name="Retone Dev"
-bundle_id="io.github.jellydn.retone.dev"
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' "$root/Cargo.toml" | head -1)
 
-# A debug build: it keeps Rune's headless tooling and the dev prefs folder, and the spikes
-# need its diagnostics more than its speed.
-cargo build --manifest-path "$root/Cargo.toml"
+if $release; then
+  name="Retone"
+  bundle_id="io.github.jellydn.retone"
+  cargo build --locked --release --manifest-path "$root/Cargo.toml"
+  binary="$root/target/release/retone"
+else
+  name="Retone Dev"
+  bundle_id="io.github.jellydn.retone.dev"
+  # A debug build: it keeps Rune's headless tooling and the dev prefs folder, and the spikes
+  # need its diagnostics more than its speed.
+  cargo build --manifest-path "$root/Cargo.toml"
+  binary="$root/target/debug/retone"
+fi
+
+sparkle_keys=""
+if $release && [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
+  if [ ! -d "${SPARKLE_FRAMEWORK:-}" ]; then
+    echo "SPARKLE_PUBLIC_KEY is set, but SPARKLE_FRAMEWORK is not a Sparkle.framework folder" >&2
+    exit 1
+  fi
+  sparkle_keys="  <key>SUFeedURL</key><string>https://raw.githubusercontent.com/jellydn/retone/main/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>"
+fi
 
 app="$out/$name.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
-cp "$root/target/debug/retone" "$app/Contents/MacOS/retone"
+cp "$binary" "$app/Contents/MacOS/retone"
 cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,12 +73,31 @@ cat > "$app/Contents/Info.plist" <<EOF
   <!-- Menu-bar app: no Dock icon, no menu bar of its own. -->
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+$sparkle_keys
 </dict>
 </plist>
 EOF
 
-# Ad hoc: macOS ties the Accessibility grant to this exact build, so each rebuild asks again.
-codesign --force --sign - --identifier "$bundle_id" "$app"
-codesign --verify --strict "$app"
+identity=${SIGNING_IDENTITY:-}
+if $release && [ -z "$identity" ] && security find-identity -v -p codesigning | grep -q '"Retone Release Signing"'; then
+  identity="Retone Release Signing"
+fi
+identity=${identity:--}
+
+if [ -n "$sparkle_keys" ]; then
+  mkdir -p "$app/Contents/Frameworks"
+  ditto "$SPARKLE_FRAMEWORK" "$app/Contents/Frameworks/Sparkle.framework"
+  # Sign the framework's helpers inside out; --deep is not reliable for Sparkle's XPC services.
+  fw="$app/Contents/Frameworks/Sparkle.framework/Versions/B"
+  for part in "$fw/XPCServices/Installer.xpc" "$fw/XPCServices/Downloader.xpc" "$fw/Autoupdate" "$fw/Updater.app"; do
+    codesign --force --options runtime --sign "$identity" "$part"
+  done
+  codesign --force --options runtime --sign "$identity" "$app/Contents/Frameworks/Sparkle.framework"
+fi
+
+# Ad hoc: macOS ties the Accessibility grant to this exact build, so each new build asks again.
+# A stable certificate keeps the grant across updates.
+codesign --force --sign "$identity" --identifier "$bundle_id" "$app"
+codesign --verify --deep --strict "$app"
 codesign -dr - "$app" 2>&1 | sed -n 's/^# designated => /designated requirement: /p'
 echo "$app"
