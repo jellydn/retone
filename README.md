@@ -65,6 +65,9 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 # Add the tap
 brew tap jellydn/retone https://github.com/jellydn/retone
 
+# Trust only the Retone cask (Homebrew refuses casks from untrusted taps)
+brew trust --cask jellydn/retone/retone
+
 # Install Retone
 brew install --cask retone
 ```
