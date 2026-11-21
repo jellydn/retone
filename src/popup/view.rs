@@ -1,0 +1,210 @@
+//! What the popup shows for each flow state. Pure: reads state, builds elements.
+
+use super::Popup;
+use crate::config::Config;
+use crate::flow::{Event, Notice, Phase, State};
+use crate::provider::consent;
+use crate::styles::{PRESETS, Style};
+use rune::{Cx, El, ScrollSpec, Tx, col, el, row, spacer, text};
+use rune_kit::{Button, ButtonVariant, Kit, Spinner};
+
+/// The styles the picker offers, in key order 1–5: the presets, then Custom when it is set.
+pub fn styles(config: &Config) -> Vec<Style> {
+    let mut all = PRESETS.to_vec();
+    if !config.custom_style.trim().is_empty() {
+        all.push(Style::Custom(config.custom_style.trim().to_string()));
+    }
+    all
+}
+
+pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
+    let k = p.config.theme.kit(cx.system_dark());
+    let body = match &p.flow.state {
+        State::Idle | State::Capturing { .. } => loading(&k, "Reading the selection…"),
+        State::Notice(notice) => notice_body(p, &k, notice),
+        State::AwaitingConsent { .. } => consent_body(p, &k),
+        State::Previewing { original, style, phase, can_replace, .. } => {
+            preview_body(p, &k, original, style, phase, *can_replace)
+        }
+        State::Applying { .. } => loading(&k, "Replacing…"),
+    };
+    col()
+        .key("popup")
+        .w_full()
+        .h_full()
+        .radius(12.0)
+        .clip_rounded(12.0)
+        .fill(k.c.surface_raised)
+        .border(1.0, k.c.border_base)
+        .padding(14.0)
+        .gap(10.0)
+        .child(header(p, &k))
+        .child(body)
+}
+
+fn header(p: &Popup, k: &Kit) -> El {
+    let source = match &p.provider {
+        Some(provider) => format!("{} · {}", provider.kind().name(), provider.model()),
+        None => "No provider".into(),
+    };
+    row()
+        .key("header")
+        .w_full()
+        .gap(8.0)
+        .center_y()
+        .child(text("Retone").font(k.ty.ui_medium).color(k.c.text_strong))
+        .child(spacer())
+        .child(text(source).font(k.ty.text_xsmall).color(k.c.text_muted).max_lines(1))
+}
+
+fn loading(k: &Kit, label: &str) -> El {
+    row()
+        .key("loading")
+        .w_full()
+        .grow(1.0)
+        .gap(10.0)
+        .center()
+        .child(Spinner::new().size(16.0).build(k))
+        .child(text(label.to_string()).font(k.ty.ui).color(k.c.text_muted))
+}
+
+fn message(k: &Kit, key: &str, title: &str, body: &str, tone: rune::Color) -> El {
+    col()
+        .key(key.to_string())
+        .w_full()
+        .gap(6.0)
+        .child(text(title.to_string()).font(k.ty.ui_medium).color(tone))
+        .child(text(body.to_string()).font(k.ty.ui).color(k.c.text_base).wrap())
+}
+
+fn buttons(items: Vec<El>) -> El {
+    let mut bar = row().key("actions").w_full().gap(8.0).center_y().child(spacer());
+    for item in items {
+        bar = bar.child(item);
+    }
+    bar
+}
+
+fn action(label: &str, shortcut: &str, variant: ButtonVariant, event: fn() -> Event, k: &Kit) -> El {
+    Button::new(label)
+        .variant(variant)
+        .shortcut(shortcut)
+        .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(event(), tx))
+        .build(k)
+}
+
+fn notice_body(p: &Popup, k: &Kit, notice: &Notice) -> El {
+    let (title, body) = match notice {
+        Notice::Refused(refusal) => (refusal.title().to_string(), refusal.message()),
+        Notice::NoProvider => {
+            let body = p.provider_problem.clone().unwrap_or_else(|| "Choose a provider in Settings.".into());
+            ("No provider".into(), body)
+        }
+        Notice::CaptureFailed(error) => ("Cannot read the selection".into(), error.clone()),
+    };
+    let mut actions = vec![action("OK", "⎋", ButtonVariant::Neutral, || Event::Cancel, k)];
+    if matches!(notice, Notice::NoProvider) {
+        actions.insert(
+            0,
+            Button::new("Open Settings")
+                .variant(ButtonVariant::Outline)
+                .on_press_tx(|p: &mut Popup, tx: &mut Tx| p.open_settings(tx))
+                .build(k),
+        );
+    }
+    col()
+        .w_full()
+        .grow(1.0)
+        .gap(10.0)
+        .child(message(k, "notice", &title, &body, k.c.warning.fg))
+        .child(spacer())
+        .child(buttons(actions))
+}
+
+fn consent_body(p: &Popup, k: &Kit) -> El {
+    let question = p.provider.as_ref().map(consent::question).unwrap_or_default();
+    col()
+        .w_full()
+        .grow(1.0)
+        .gap(10.0)
+        .child(message(k, "consent", "Allow this provider?", &question, k.c.text_strong))
+        .child(
+            text("Retone asks once per provider and model. Revoke it in Settings → Privacy.")
+                .font(k.ty.text_xsmall)
+                .color(k.c.text_muted)
+                .wrap(),
+        )
+        .child(spacer())
+        .child(buttons(vec![
+            action("Cancel", "⎋", ButtonVariant::Neutral, || Event::Cancel, k),
+            action("Allow", "↩", ButtonVariant::Contrast, || Event::ConsentGiven, k),
+        ]))
+}
+
+fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase, can_replace: bool) -> El {
+    let picker = style_picker(p, k, style);
+    let (result, ready) = match phase {
+        Phase::Loading => (loading(k, "Rewriting…"), false),
+        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, k.c.text_strong), true),
+        Phase::Failed(error) => (message(k, "error", "Rewrite failed", error, k.c.danger.fg), false),
+    };
+    let mut notes = Vec::new();
+    if let Some(error) = &p.flow.apply_error {
+        notes.push(format!("Replace failed: {error}. Use Copy instead."));
+    } else if ready && !can_replace {
+        notes.push(if p.clipboard_only {
+            "Clipboard-only mode: grant Accessibility in Settings to use Replace.".to_string()
+        } else {
+            "Retone cannot verify this field, so only Copy is offered.".to_string()
+        });
+    }
+    if let Some(warning) = &p.adapter_warning {
+        notes.push(warning.clone());
+    }
+    let mut actions = vec![action("Retry", "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
+    if ready {
+        actions.push(action("Copy", "⌘C", ButtonVariant::Neutral, || Event::Copy, k));
+    }
+    if ready && can_replace && p.flow.apply_error.is_none() {
+        actions.push(action("Replace", "↩", ButtonVariant::Contrast, || Event::Replace, k));
+    }
+    let mut body = col()
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .gap(8.0)
+        .child(picker)
+        .child(text(original.to_string()).key("original").font(k.ty.text_small).color(k.c.text_muted).max_lines(2))
+        .child(el().w_full().h(1.0).fill(k.c.border_weak))
+        .child(result);
+    for note in notes {
+        body = body.child(text(note).font(k.ty.text_xsmall).color(k.c.warning.fg).wrap());
+    }
+    body.child(buttons(actions))
+}
+
+fn scrolling(k: &Kit, key: &str, value: &str, color: rune::Color) -> El {
+    col()
+        .key(key.to_string())
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .scroll(ScrollSpec { stick_bottom: false })
+        .child(text(value.to_string()).font(k.ty.ui).color(color).wrap().selectable(true))
+}
+
+fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
+    let mut picker = row().key("styles").w_full().gap(4.0);
+    for (index, style) in styles(&p.config).into_iter().enumerate() {
+        let on = style.name() == current.name();
+        let label = format!("{} {}", index + 1, style.name());
+        let chosen = style.clone();
+        picker = picker.child(
+            Button::new(label)
+                .variant(if on { ButtonVariant::Contrast } else { ButtonVariant::GhostMuted })
+                .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(Event::ChangeStyle(chosen.clone()), tx))
+                .build(k),
+        );
+    }
+    picker
+}

@@ -1,0 +1,51 @@
+[package]
+name = "retone"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+description = "Retone for macOS: rewrite the selected text in any app with your own hotkey"
+publish = false
+
+[dependencies]
+# One Rune `dev` revision for Rune and every patch below; bump them together.
+rune = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+rune-core = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Plain HTTP only: the local provider accepts loopback endpoints, so TLS is never needed.
+ureq = { version = "3", default-features = false, features = ["json"] }
+
+# Same objc2 family versions as Rune's lockfile.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["std", "NSArray", "NSData", "NSString", "NSURL", "NSGeometry", "NSValue", "NSDictionary", "NSObject"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "libc", "objc2-core-foundation", "NSApplication", "NSPasteboard", "NSPasteboardItem", "NSScreen", "NSEvent", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSResponder", "NSMenu", "NSMenuItem", "NSRunningApplication", "NSWorkspace", "NSImage", "NSCell"] }
+objc2-core-foundation = { version = "0.3", features = ["std", "CFString", "CFArray", "CFBase", "CFNumber", "CFDictionary", "CFCGTypes"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "libc"] }
+objc2-application-services = { version = "0.3", default-features = false, features = ["std", "AXUIElement", "AXValue", "AXError", "AXAttributeConstants", "AXRoleConstants", "AXValueConstants", "HIServices", "libc", "objc2-core-graphics"] }
+
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+# Only the FFI leaf modules under src/mac/ opt in, each block with a SAFETY comment.
+unsafe_code = "deny"
+
+[lints.clippy]
+await_holding_lock = "deny"
+dbg_macro = "deny"
+disallowed_methods = "deny"
+disallowed_types = "deny"
+expect_used = "warn"
+let_underscore_must_use = "deny"
+todo = "warn"
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "warn"
