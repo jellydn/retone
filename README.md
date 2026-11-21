@@ -61,6 +61,8 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 
 ### Using Homebrew (Recommended)
 
+Needs a current Homebrew (with `brew trust`); run `brew update` first if `brew trust` is unknown.
+
 ```bash
 # Add the tap
 brew tap jellydn/retone https://github.com/jellydn/retone

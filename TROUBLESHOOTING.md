@@ -48,7 +48,7 @@ Retone saves the clipboard before it copies or pastes, and puts it back afterwar
 
 ## Homebrew
 
-- `Error: Refusing to load cask jellydn/retone/retone from untrusted tap`: run `brew trust --cask jellydn/retone/retone` (note the full name, `jellydn/retone/retone`), then install again. If you trusted a misspelled name, remove it with `brew untrust`.
+- `Error: Refusing to load cask jellydn/retone/retone from untrusted tap`: run `brew trust --cask jellydn/retone/retone` (note the full name, `jellydn/retone/retone`), then install again. If you trusted a misspelled name, list your entries with `brew trust --json v1` and remove the wrong one, for example `brew untrust --cask jellydn/retone/reton` or `brew untrust --tap jellydn/reton`. If `brew trust` is unknown, run `brew update` first.
 - `brew install --cask retone` fails with a checksum error right after a release: wait a few minutes and run `brew update`; the cask updates after the release assets upload.
 - Homebrew installs do not update themselves. Use `brew upgrade --cask retone`.
 
