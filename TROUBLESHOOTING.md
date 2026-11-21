@@ -54,4 +54,4 @@ Retone saves the clipboard before it copies or pastes, and puts it back afterwar
 ## Provider errors
 
 - **Local**: the endpoint must be on loopback (`127.0.0.1`, `localhost` or `::1`), and the model ID must match exactly. Use the model list in **Settings → Provider**.
-- **Pi / OpenCode**: Retone accepts only the CLI versions it was tested with. If Retone turned an adapter off because it found history files, the message names the file. Remove it, and report the CLI version in an issue.
+- **Pi / OpenCode**: Retone accepts only the CLI versions it was tested with. If Retone turned an adapter off because the CLI saved files, the message names the data folder that changed. Look in that folder for new session or history files and remove them only if they hold text you rewrote. Then report the CLI version in an issue.

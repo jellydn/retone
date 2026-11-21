@@ -7,10 +7,21 @@ cask "retone" do
   desc "Rewrite the selected text in any app with your own hotkey"
   homepage "https://github.com/jellydn/retone"
 
-  # Betas are GitHub pre-releases, which :github_latest skips.
+  # Betas are GitHub pre-releases, which :github_latest and the default
+  # :github_releases skip; keep them, but not drafts.
   livecheck do
     url :url
-    strategy :github_releases
+    regex(/^v?(\d+(?:\.\d+)+(?:-[\w.]+)?)$/i)
+    strategy :github_releases do |json, regex|
+      json.map do |release|
+        next if release["draft"]
+
+        match = release["tag_name"]&.match(regex)
+        next if match.blank?
+
+        match[1]
+      end
+    end
   end
 
   depends_on arch: :arm64

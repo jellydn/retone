@@ -7,8 +7,9 @@ on:
 permissions:
   contents: write
 
+# One release at a time: each run rewrites the shared cask and appcast on main.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +30,10 @@ jobs:
       - run: cargo test --locked
       - name: Fetch Sparkle (only with a key)
         if: env.SPARKLE_PUBLIC_KEY != '' && env.SPARKLE_PRIVATE_KEY != ''
-        run: echo "SPARKLE_TOOLS=$(sh scripts/sparkle-tools.sh)" >> "$GITHUB_ENV"
+        run: |
+          # A separate assignment, so a failed download or checksum fails this step.
+          tools=$(sh scripts/sparkle-tools.sh)
+          echo "SPARKLE_TOOLS=$tools" >> "$GITHUB_ENV"
       - name: Build bundle, DMG, ZIP, and checksums
         run: |
           if [ -n "${SPARKLE_TOOLS:-}" ]; then

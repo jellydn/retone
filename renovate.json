@@ -7,7 +7,7 @@
     {
       "description": "Rune and its patched crates share one git revision; a bump must move them together.",
       "matchManagers": ["cargo"],
-      "matchPackageNames": [
+      "matchDepNames": [
         "rune",
         "rune-kit",
         "rune-core",

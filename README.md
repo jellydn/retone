@@ -74,8 +74,8 @@ Update with `brew upgrade --cask retone`. When Homebrew installed Retone, the ap
 ### Direct download
 
 1. Download `Retone-<version>.dmg` (or the `.zip`) from [Releases](https://github.com/jellydn/retone/releases). Betas are marked **Pre-release**.
-2. Check the file against `SHA256SUMS`: `shasum -a 256 -c SHA256SUMS`
-3. Open the DMG and drag **Retone** to **Applications**.
+2. Download `SHA256SUMS` to the same folder and check your file: `shasum -a 256 -c SHA256SUMS --ignore-missing`
+3. DMG: open it and drag **Retone** to **Applications**. ZIP: double-click it to extract `Retone.app`, then move `Retone.app` to **Applications**.
 4. Open Retone. If macOS blocks it, see the first launch warning above.
 
 ### From source
@@ -134,7 +134,8 @@ Rules for every CLI provider:
 
 - Retone checks the CLI version and refuses versions it does not know.
 - The text goes on stdin, never in arguments, so other processes cannot read it from the process list.
-- Each run uses a `0700` temporary folder that Retone deletes afterwards. A guard watches for files written outside it; when it finds one, Retone turns that adapter off and tells you.
+- Each run uses a `0700` temporary folder that Retone deletes afterwards.
+- A guard compares the CLI's own data folders before and after each run (Pi: `~/.pi/agent/sessions`; OpenCode: its `~/.local/share`, `~/.local/state`, `~/.cache` and `~/.config` folders). When one changes, Retone turns that adapter off and names the folder. Other locations are not watched.
 - A run that takes too long is stopped with its whole process group.
 - Your provider still sees the text. For OpenCode with a hosted model, that model's provider sees it too.
 

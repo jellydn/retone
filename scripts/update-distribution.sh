@@ -12,6 +12,26 @@ dmg="target/release/assets/Retone-$version.dmg"
 url="https://github.com/jellydn/retone/releases/download/v$version/Retone-$version.dmg"
 sha=$(shasum -a 256 "$dmg" | cut -d' ' -f1)
 
+# Never let an older tag that finishes late replace a newer cask or appcast.
+current=$(sed -n 's/^  version "\(.*\)"/\1/p' Casks/retone.rb 2>/dev/null || true)
+if [ -n "$current" ] && ! python3 - "$current" "$version" <<'PY'
+import re, sys
+
+def key(v):
+    core, _, pre = v.partition("-")
+    nums = tuple(int(n) for n in core.split("."))
+    # SemVer: a pre-release sorts before its release; numeric parts compare as numbers.
+    parts = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split(".")) if pre else ()
+    return nums + ((0, parts) if pre else (1, ()),)
+
+current, new = sys.argv[1:]
+sys.exit(0 if key(new) >= key(current) else 1)
+PY
+then
+  echo "Casks/retone.rb has $current, newer than $version: not changed." >&2
+  exit 0
+fi
+
 cat > Casks/retone.rb <<EOF
 cask "retone" do
   version "$version"
@@ -22,10 +42,21 @@ cask "retone" do
   desc "Rewrite the selected text in any app with your own hotkey"
   homepage "https://github.com/jellydn/retone"
 
-  # Betas are GitHub pre-releases, which :github_latest skips.
+  # Betas are GitHub pre-releases, which :github_latest and the default
+  # :github_releases skip; keep them, but not drafts.
   livecheck do
     url :url
-    strategy :github_releases
+    regex(/^v?(\d+(?:\.\d+)+(?:-[\w.]+)?)$/i)
+    strategy :github_releases do |json, regex|
+      json.map do |release|
+        next if release["draft"]
+
+        match = release["tag_name"]&.match(regex)
+        next if match.blank?
+
+        match[1]
+      end
+    end
   end
 
   depends_on arch: :arm64
