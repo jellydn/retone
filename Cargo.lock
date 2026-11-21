@@ -2768,6 +2768,7 @@ dependencies = [
  "rune",
  "rune-core",
  "rune-kit",
+ "security-framework",
  "serde",
  "serde_json",
  "ureq",

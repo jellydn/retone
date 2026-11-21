@@ -1,10 +1,12 @@
-//! Local AI: an OpenAI-compatible endpoint (Ollama, LM Studio) on this Mac, or, after the user
+//! Local AI: an OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp's llama-server) on this
+//! Mac, or, after the user
 //! turns it on, on a private network address (LAN or Tailscale).
 //!
 //! Only loopback and private addresses are accepted. The check runs in the HTTP client's
 //! resolver, on the addresses it then connects to, so a host name cannot resolve to a public
 //! address after the check. No proxy and no redirects, so the text cannot be sent on elsewhere.
-//! No API key field; Retone stores nothing (the server may log on its side).
+//! An optional API key (llama-server `--api-key`) is sent as a Bearer token; it lives in the
+//! Keychain, never in prefs. Retone stores no text (the server may log on its side).
 
 use super::{DEADLINE, answer_cap};
 use crate::styles::{self, Style};
@@ -18,9 +20,22 @@ use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 pub const OLLAMA: &str = "http://127.0.0.1:11434/v1";
 pub const LM_STUDIO: &str = "http://127.0.0.1:1234/v1";
+/// llama.cpp's `llama-server`: one loaded model, whose ID is often the GGUF file path; it
+/// ignores the model name in requests.
+pub const LLAMA_CPP: &str = "http://127.0.0.1:8080/v1";
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
 const NOT_PRIVATE: &str = "Retone accepts only addresses on this Mac or on a private network (LAN or Tailscale), so it did not send the text.";
+
+/// The API key for one request. Debug never prints it, so it cannot end up in a log line.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ApiKey(pub String);
+
+impl std::fmt::Debug for ApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiKey(***)")
+    }
+}
 
 /// What a host is before any name lookup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,19 +168,23 @@ fn agent(endpoint: &str) -> ureq::Agent {
 }
 
 /// Model IDs from `GET /models`, for the exact-ID picker in Settings.
-pub fn list_models(endpoint: &str, allow_network: bool) -> Result<Vec<String>, String> {
+pub fn list_models(endpoint: &str, allow_network: bool, key: Option<&ApiKey>) -> Result<Vec<String>, String> {
     let endpoint = validate_endpoint(endpoint, allow_network)?;
-    let mut response =
-        agent(&endpoint).get(format!("{endpoint}/models")).call().map_err(|e| unreachable_message(&e))?;
-    if !response.status().is_success() {
-        return Err(format!("The server answered {}.", response.status()));
+    let mut request = agent(&endpoint).get(format!("{endpoint}/models"));
+    if let Some(ApiKey(key)) = key {
+        request = request.header("Authorization", format!("Bearer {key}"));
     }
+    let mut response = request.call().map_err(|e| unreachable_message(&e))?;
+    let status = response.status();
     let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
+    if !status.is_success() {
+        return Err(status_message(status, &body));
+    }
     let models = body["data"].as_array().ok_or_else(bad_answer)?;
     Ok(models.iter().filter_map(|model| model["id"].as_str().map(str::to_string)).collect())
 }
 
-pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result<String, String> {
+pub fn rewrite(endpoint: &str, model: &str, key: Option<&ApiKey>, style: &Style, text: &str) -> Result<String, String> {
     // The opt-in was checked when the provider was built from the saved settings; this check
     // still refuses public addresses, and the resolver checks the addresses themselves.
     let endpoint = validate_endpoint(endpoint, true)?;
@@ -179,17 +198,15 @@ pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result
             { "role": "user", "content": prompt.user },
         ],
     });
-    let mut response = agent(&endpoint)
-        .post(format!("{endpoint}/chat/completions"))
-        .send_json(&body)
-        .map_err(|e| unreachable_message(&e))?;
+    let mut request = agent(&endpoint).post(format!("{endpoint}/chat/completions"));
+    if let Some(ApiKey(key)) = key {
+        request = request.header("Authorization", format!("Bearer {key}"));
+    }
+    let mut response = request.send_json(&body).map_err(|e| unreachable_message(&e))?;
     let status = response.status();
     let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
     if !status.is_success() {
-        // The server's own message is short and names the model problem; it never echoes the text
-        // for these errors, and the caller redacts it anyway.
-        let detail = body["error"]["message"].as_str().or(body["error"].as_str()).unwrap_or("no details");
-        return Err(format!("The server answered {status}: {detail}"));
+        return Err(status_message(status, &body));
     }
     let answer = body["choices"][0]["message"]["content"].as_str().ok_or_else(bad_answer)?;
     let answer = styles::clean_answer(answer);
@@ -199,11 +216,31 @@ pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result
     Ok(answer)
 }
 
+/// The server's own message is short and names the model problem (llama-server: "Loading model"
+/// while it starts); it never echoes the text for these errors, and the caller redacts it anyway.
+fn status_message(status: ureq::http::StatusCode, body: &Value) -> String {
+    if status.as_u16() == 401 {
+        return "The server needs an API key (llama-server --api-key), or the key is wrong. Set it in Settings → Provider."
+            .into();
+    }
+    let detail = body["error"]["message"].as_str().or(body["error"].as_str()).unwrap_or("no details");
+    format!("The server answered {status}: {detail}")
+}
+
+/// A model ID for display: llama-server reports the GGUF file path, so only its file name is
+/// shown. Other IDs stay whole, as `hf.co/user/model:q4` (Ollama) names a different model.
+pub fn short_model_name(model: &str) -> &str {
+    if !model.starts_with('/') {
+        return model;
+    }
+    model.rsplit('/').next().filter(|name| !name.is_empty()).unwrap_or(model)
+}
+
 fn unreachable_message(error: &ureq::Error) -> String {
     match error {
         ureq::Error::Timeout(_) => format!("No answer within {} s.", DEADLINE.as_secs()),
         ureq::Error::ConnectionFailed | ureq::Error::Io(_) | ureq::Error::HostNotFound => {
-            "Cannot reach the local server. Is Ollama or LM Studio running?".into()
+            "Cannot reach the local server. Is Ollama, LM Studio or llama-server running?".into()
         }
         ureq::Error::Other(_) => NOT_PRIVATE.into(),
         ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => {

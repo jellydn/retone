@@ -171,9 +171,12 @@ impl Popup {
         let listing = self.links.is_some()
             && provider::local::validate_endpoint(&self.config.local_endpoint, allow_network).is_ok();
         if listing {
-            let request = (self.config.local_endpoint.clone(), allow_network);
-            self.local_models
-                .request(request, |(endpoint, allow_network)| provider::local::list_models(&endpoint, allow_network));
+            let shared = self.links.as_ref().map(|links| links.shared.clone());
+            let request = (self.config.local_endpoint.clone(), allow_network, shared);
+            self.local_models.request(request, |(endpoint, allow_network, shared)| {
+                let key = shared.and_then(|shared| shared.api_key()).map(provider::local::ApiKey);
+                provider::local::list_models(&endpoint, allow_network, key.as_ref())
+            });
         }
         self.picker = Some(Picker { choices, selected, listing });
     }
@@ -283,10 +286,17 @@ impl Popup {
             return;
         };
         let cancel = self.cancel.clone();
-        self.request
-            .request((attempt, provider, style, text, cancel, env), |(attempt, provider, style, text, cancel, env)| {
+        let shared = self.links.as_ref().map(|links| links.shared.clone());
+        self.request.request(
+            (attempt, provider, style, text, cancel, env, shared),
+            |(attempt, provider, style, text, cancel, mut env, shared)| {
+                // In the worker: the Keychain read can show a prompt.
+                if provider.kind() == provider::Kind::Local {
+                    env.local_api_key = shared.and_then(|shared| shared.api_key()).map(provider::local::ApiKey);
+                }
                 (attempt, provider.rewrite(&style, &text, &cancel, &env))
-            });
+            },
+        );
     }
 
     #[cfg(target_os = "macos")]

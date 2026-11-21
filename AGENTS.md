@@ -44,7 +44,7 @@ src/
 - **Nothing changes on failure or cancel**: replace only after the target check passes; restore the clipboard unless another app changed it.
 - **Input limit**: 2,000 characters.
 - **No default hotkey**.
-- **Local provider: loopback, or private addresses after the opt-in** (checked in the resolver at connect time; no proxy, no redirects; consent per host). CLI providers get text on stdin, a `0700` temp folder, a version gate, and the file-write guard.
+- **Local provider: loopback, or private addresses after the opt-in** (checked in the resolver at connect time; no proxy, no redirects; consent per host; the optional API key lives in the Keychain, never in prefs). CLI providers get text on stdin, a `0700` temp folder, a version gate, and the file-write guard.
 - **`unsafe` only in `src/mac/`**, each block with a `// SAFETY:` comment, behind safe functions. No `unsafe impl Send`; use the native worker.
 - **Bundle IDs**: release `io.github.jellydn.retone`, dev `io.github.jellydn.retone.dev`. Do not share prefs or grants between them.
 - **One update owner**: Homebrew installs never start Sparkle; Sparkle starts only with `SUPublicEDKey` in the bundle.

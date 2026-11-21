@@ -5,6 +5,7 @@
 pub mod ax;
 #[allow(unsafe_code)]
 pub mod events;
+pub mod keychain;
 #[allow(unsafe_code)]
 pub mod pasteboard;
 pub mod permissions;

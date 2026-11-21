@@ -166,6 +166,29 @@ fn provider_page(s: &SettingsUi, k: &Kit) -> El {
     page
 }
 
+/// Optional, for llama-server `--api-key`. The saved key is never shown again.
+fn api_key_row(s: &SettingsUi, k: &Kit) -> El {
+    let placeholder = if s.api_key_saved { "Saved in the Keychain" } else { "Optional, for llama-server --api-key" };
+    let field = TextInput::new(&s.api_key)
+        .secure()
+        .label("API key")
+        .placeholder(placeholder)
+        .on_edit(|s: &mut SettingsUi| &mut s.api_key)
+        .build(k);
+    let mut block = col().w_full().gap(4.0).child(labelled(k, "API key", field));
+    if s.api_key_saved {
+        block = block.child(
+            row().child(
+                Button::new("Remove key")
+                    .variant(ButtonVariant::Ghost)
+                    .on_press(|s: &mut SettingsUi| s.remove_api_key())
+                    .build(k),
+            ),
+        );
+    }
+    block
+}
+
 fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
     let presets = row()
         .gap(8.0)
@@ -179,6 +202,12 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
             Button::new("LM Studio")
                 .variant(ButtonVariant::Ghost)
                 .on_press(|s: &mut SettingsUi| s.endpoint = rune::TextEdit::new(local::LM_STUDIO))
+                .build(k),
+        )
+        .child(
+            Button::new("llama.cpp")
+                .variant(ButtonVariant::Ghost)
+                .on_press(|s: &mut SettingsUi| s.endpoint = rune::TextEdit::new(local::LLAMA_CPP))
                 .build(k),
         )
         .child(spacer())
@@ -205,6 +234,7 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
                 .on_toggle(|s: &mut SettingsUi| s.allow_network = !s.allow_network)
                 .build(k),
         )
+        .child(api_key_row(s, k))
         .child(labelled(
             k,
             "Model",
@@ -223,7 +253,7 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
             for model in models.iter().take(8) {
                 let name = model.clone();
                 list = list.child(
-                    Button::new(model.clone())
+                    Button::new(local::short_model_name(model))
                         .variant(ButtonVariant::GhostMuted)
                         .on_press(move |s: &mut SettingsUi| s.pick_local_model(&name))
                         .build(k),
@@ -239,7 +269,7 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
          your network: plain http is not encrypted, so use Tailscale or https on a shared network. The server \
          may log requests on its side."
     } else {
-        "Only addresses on this Mac are accepted. Ollama and LM Studio may log requests on their side."
+        "Only addresses on this Mac are accepted. The server may log requests on its side."
     };
     page.child(note(k, privacy))
 }

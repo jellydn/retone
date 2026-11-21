@@ -13,7 +13,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-14+-blue.svg)]() [![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-arm64-lightgrey.svg)]() [![Rust](https://img.shields.io/badge/Rust-1.99-orange.svg)]() [![Built with Rune](https://img.shields.io/badge/UI-Rune-purple.svg)](https://github.com/anomalyco/rune) [![CI](https://github.com/jellydn/retone/actions/workflows/ci.yml/badge.svg)](https://github.com/jellydn/retone/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-14+-blue.svg)](<>) [![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-arm64-lightgrey.svg)](<>) [![Rust](https://img.shields.io/badge/Rust-1.99-orange.svg)](<>) [![Built with Rune](https://img.shields.io/badge/UI-Rune-purple.svg)](https://github.com/anomalyco/rune) [![CI](https://github.com/jellydn/retone/actions/workflows/ci.yml/badge.svg)](https://github.com/jellydn/retone/actions/workflows/ci.yml)
 
 </div>
 
@@ -27,7 +27,7 @@
 ## Installation Requirements
 
 - macOS 14 or later on Apple Silicon (tested on macOS 27 only)
-- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio), [Pi](https://github.com/badlogic/pi-mono), or [OpenCode](https://opencode.ai)
+- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp), [Pi](https://github.com/badlogic/pi-mono), or [OpenCode](https://opencode.ai)
 
 > [!IMPORTANT]
 > **First launch security warning**
@@ -125,24 +125,24 @@ Retone does not run when Retone itself is in front, and refuses selections longe
 
 ## Settings
 
-| Page        | What it does                                                                                    |
-| ----------- | ----------------------------------------------------------------------------------------------- |
-| Shortcut    | Record a global hotkey. Retone refuses chords that another app holds or that the popup needs. |
-| Provider    | Choose Local, Pi or OpenCode, set the endpoint and the exact model ID, and save.                |
-| Style       | Default style and your custom instruction.                                                       |
-| Privacy     | The no-history rules, **Revoke all consent**, and turning an adapter on again after the guard.  |
-| Permissions | Accessibility status and a link to System Settings.                                             |
-| Updates     | Version and the update channel (Homebrew, Sparkle, or manual).                                  |
+| Page        | What it does                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| Shortcut    | Record a global hotkey. Retone refuses chords that another app holds or that the popup needs.  |
+| Provider    | Choose Local, Pi or OpenCode, set the endpoint and the exact model ID, and save.               |
+| Style       | Default style and your custom instruction.                                                     |
+| Privacy     | The no-history rules, **Revoke all consent**, and turning an adapter on again after the guard. |
+| Permissions | Accessibility status and a link to System Settings.                                            |
+| Updates     | Version and the update channel (Homebrew, Sparkle, or manual).                                 |
 
 ## Providers and the no-history rules
 
 Retone asks for consent the first time it sends text to a provider and model, and saves that consent per provider and model. A Local AI server outside this Mac also gets its own consent per host.
 
-| Provider  | How Retone runs it                                                                                                                                                                                 |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local AI  | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`. Presets for Ollama (`127.0.0.1:11434`) and LM Studio (`127.0.0.1:1234`). See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
-| Pi        | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2.                                                                           |
-| OpenCode  | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                         |
+| Provider | How Retone runs it                                                                                                                                                                                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local AI | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`. Presets for Ollama (`127.0.0.1:11434`), LM Studio (`127.0.0.1:1234`) and llama.cpp (`127.0.0.1:8080`). Optional API key in the Keychain. See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
+| Pi       | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2.                                                                                                                |
+| OpenCode | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                                                                                                           |
 
 ### Local AI on your LAN or Tailscale
 
@@ -152,6 +152,16 @@ By default, Retone sends text only to a server on this Mac (`127.0.0.1`, `localh
 - Plain `http://` is not encrypted on your network. Tailscale encrypts the traffic for you; on a shared LAN, use `https://`. HTTPS uses the macOS trust store, so a certificate from your own CA works after you trust it in Keychain Access.
 - The server must listen beyond loopback: for Ollama, set `OLLAMA_HOST=0.0.0.0`; in LM Studio, turn on **Serve on Local Network**.
 - Retone asks for consent again for each new host.
+
+#### llama.cpp (`llama-server`)
+
+```sh
+llama-server -m ~/models/qwen2.5-3b-instruct-q4_k_m.gguf --host 0.0.0.0 --port 8080 --api-key "$(openssl rand -hex 16)"
+```
+
+- Choose the **llama.cpp** preset (or your server's LAN or Tailscale address), then **List models**. llama-server serves one model and reports its file path as the ID; Retone shows only the file name. Add `--alias qwen2.5-3b` for a shorter name.
+- With `--api-key`, paste the key in **API key** and click **Save**. Retone keeps it in the macOS Keychain (not in its settings file) and sends it as `Authorization: Bearer …`. Without the key, Retone says that the server needs one.
+- Use `--host 0.0.0.0` only together with `--api-key` or on Tailscale: without a key, anyone on your network can use the server.
 
 Rules for every CLI provider:
 

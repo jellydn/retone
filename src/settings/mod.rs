@@ -56,6 +56,10 @@ pub struct SettingsUi {
     pub endpoint: TextEdit,
     /// The "Allow LAN and Tailscale servers" switch; saved with the rest of the Provider page.
     pub allow_network: bool,
+    /// A new API key typed in; Save moves it to the Keychain and clears the field.
+    pub api_key: TextEdit,
+    /// Whether a key is in the Keychain, from prefs, so the Keychain is not read here.
+    pub api_key_saved: bool,
     pub local_model: TextEdit,
     pub pi_model: TextEdit,
     pub opencode_model: TextEdit,
@@ -90,6 +94,8 @@ impl SettingsUi {
             conflict_owner: None,
             endpoint: TextEdit::new(&config.local_endpoint),
             allow_network: config.local_allow_network,
+            api_key: TextEdit::default(),
+            api_key_saved: shared.api_key_saved(),
             local_model: TextEdit::new(&config.local_model),
             pi_model: TextEdit::new(&config.pi_model),
             opencode_model: TextEdit::new(&config.opencode_model),
@@ -196,6 +202,15 @@ impl SettingsUi {
             None => Ok("No provider: the shortcut shows \"Choose a provider\".".to_string()),
             Some(_) => next.provider().map(|p| format!("Saved: {} · {}", p.kind().name(), p.model())),
         };
+        let new_key = self.api_key.text.trim().to_string();
+        let checked = checked.and_then(|saved| {
+            if !new_key.is_empty() {
+                self.shared.set_api_key(Some(&new_key))?;
+                self.api_key = TextEdit::default();
+                self.api_key_saved = true;
+            }
+            Ok(saved)
+        });
         if checked.is_ok() {
             self.config = next;
             self.save();
@@ -216,10 +231,23 @@ impl SettingsUi {
         *field = TextEdit::new(model);
     }
 
+    pub fn remove_api_key(&mut self) {
+        let result = self.shared.set_api_key(None).map(|()| "API key removed from the Keychain.".to_string());
+        if result.is_ok() {
+            self.api_key_saved = false;
+        }
+        self.provider_status = Some(result);
+    }
+
     pub fn list_local_models(&mut self) {
-        let request = (self.endpoint.text.clone(), self.allow_network);
+        // A key typed but not saved yet is used as is; otherwise the saved one, read in the worker.
+        let typed = Some(self.api_key.text.trim().to_string()).filter(|key| !key.is_empty());
+        let request = (self.endpoint.text.clone(), self.allow_network, typed, self.shared.clone());
         self.listed_models = None;
-        self.models.request(request, |(endpoint, allow_network)| local::list_models(&endpoint, allow_network));
+        self.models.request(request, |(endpoint, allow_network, typed, shared)| {
+            let key = typed.or_else(|| shared.api_key()).map(local::ApiKey);
+            local::list_models(&endpoint, allow_network, key.as_ref())
+        });
     }
 
     pub fn pick_local_model(&mut self, model: &str) {
@@ -287,6 +315,14 @@ pub const SCENES: &[Scene] = &[
         s.endpoint = TextEdit::new("http://box.tailnet.ts.net:11434/v1");
         s.local_model = TextEdit::new("qwen2.5:7b");
     }),
+    ("provider-llama-cpp", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.endpoint = TextEdit::new(local::LLAMA_CPP);
+        s.api_key_saved = true;
+        s.local_model = TextEdit::new("/Users/me/models/qwen2.5-3b-instruct-q4_k_m.gguf");
+        s.listed_models = Some(Ok(vec!["/Users/me/models/qwen2.5-3b-instruct-q4_k_m.gguf".into()]));
+    }),
     ("provider-opencode", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::OpenCode);
@@ -329,6 +365,14 @@ mod tests {
         ui.save_provider();
         assert!(matches!(ui.provider_status, Some(Ok(_))), "the LAN address with the opt-in");
         assert!(ui.shared.config().local_allow_network, "the opt-in is saved with the page");
+
+        ui.api_key = TextEdit::new(" key-1 ");
+        ui.save_provider();
+        assert_eq!(ui.shared.api_key().as_deref(), Some("key-1"), "the key goes to the key store");
+        assert!(ui.api_key.text.is_empty() && ui.api_key_saved, "the field clears once saved");
+        assert!(!ui.shared.config().local_endpoint.contains("key-1"));
+        ui.remove_api_key();
+        assert_eq!(ui.shared.api_key(), None);
 
         ui.endpoint = TextEdit::new(local::OLLAMA);
         ui.save_provider();
