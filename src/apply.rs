@@ -26,12 +26,13 @@ fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
     let (Some(pid), Some(target)) = (capture.pid, capture.target.as_ref()) else {
         return Err("Retone cannot check where the text came from".into());
     };
-    if screens::frontmost_pid() != Some(pid) {
-        spike!("replace check failed: frontmost pid changed");
+    if let Err(reason) = target.still_matches(&capture.captured.text) {
+        spike!("replace check failed: {reason}");
         return Err("the selection changed".into());
     }
-    if let Err(reason) = target.still_matches(pid, &capture.captured.text) {
-        spike!("replace check failed: {reason}");
+    // After the AX re-check, so a switch to another app during it is still caught.
+    if screens::frontmost_pid() != Some(pid) {
+        spike!("replace check failed: frontmost pid changed");
         return Err("the selection changed".into());
     }
     if target.is_secure() {

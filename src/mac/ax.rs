@@ -115,11 +115,10 @@ impl Target {
     ///
     /// The check reads the target app's own focused element, not the system-wide one: Retone's
     /// popup holds key focus during Replace, so system-wide AX reports Retone as the focused app.
-    pub fn still_matches(&self, frontmost_pid: i32, captured_text: &str) -> Result<(), &'static str> {
+    /// The caller checks the frontmost app separately, after this, so that check is the last one
+    /// before the paste.
+    pub fn still_matches(&self, captured_text: &str) -> Result<(), &'static str> {
         let now = Target::focused_in(self.pid).ok_or("no focused element")?;
-        if self.pid != frontmost_pid || now.pid != self.pid {
-            return Err("another app is in front");
-        }
         let same_range = match (self.range, now.range) {
             (Some(a), Some(b)) => a.location == b.location && a.length == b.length,
             (None, None) => true,
