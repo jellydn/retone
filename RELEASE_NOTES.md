@@ -11,4 +11,4 @@ First beta. Retone rewrites the selected text in any app with your own hotkey.
 
 Known limits: ad-hoc signed (Gatekeeper warning; Accessibility must be granted again after each update), no automatic updates in this build, tested on macOS 27.2 on Apple Silicon and in few apps. See the README.
 
-Install: `brew tap jellydn/retone https://github.com/jellydn/retone && brew install --cask retone`, or download the DMG below.
+Install (run `brew update` first): `brew tap jellydn/retone https://github.com/jellydn/retone && brew trust --cask jellydn/retone/retone && brew install --cask retone`, or download the DMG below.
