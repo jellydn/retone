@@ -11,3 +11,5 @@ pub mod permissions;
 pub mod screens;
 #[allow(unsafe_code)]
 pub mod status;
+#[allow(unsafe_code)]
+pub mod updater;

@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::popup::Popup;
 use crate::provider::{Kind, consent, local};
 use crate::shared::Shared;
+use crate::updates::UpdateChannel;
 use rune::{AppHandle, Latest, Shortcut, ShortcutError, ShortcutId, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
 use std::sync::Arc;
@@ -57,6 +58,7 @@ pub struct SettingsUi {
     pub opencode_model: TextEdit,
     pub custom_style: TextEdit,
     pub provider_choice: Option<Kind>,
+    pub update_channel: UpdateChannel,
     /// The last Save result on the Provider page.
     pub provider_status: Option<Result<String, String>>,
     pub models: Latest<Result<Vec<String>, String>>,
@@ -89,6 +91,7 @@ impl SettingsUi {
             opencode_model: TextEdit::new(&config.opencode_model),
             custom_style: TextEdit::new(&config.custom_style),
             provider_choice: config.provider,
+            update_channel: UpdateChannel::default(),
             provider_status: None,
             models: Latest::default(),
             listed_models: None,

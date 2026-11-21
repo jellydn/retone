@@ -1,6 +1,6 @@
 [package]
 name = "retone"
-version = "0.0.1"
+version = "0.1.0-beta.1"
 edition = "2024"
 license = "MIT"
 description = "Retone for macOS: rewrite the selected text in any app with your own hotkey"
@@ -19,7 +19,7 @@ ureq = { version = "3", default-features = false, features = ["json"] }
 # Same objc2 family versions as Rune's lockfile.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["std", "NSArray", "NSData", "NSString", "NSURL", "NSGeometry", "NSValue", "NSDictionary", "NSObject"] }
+objc2-foundation = { version = "0.3", features = ["std", "NSArray", "NSData", "NSString", "NSURL", "NSGeometry", "NSValue", "NSDictionary", "NSObject", "NSBundle"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "libc", "objc2-core-foundation", "NSApplication", "NSPasteboard", "NSPasteboardItem", "NSScreen", "NSEvent", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSResponder", "NSMenu", "NSMenuItem", "NSRunningApplication", "NSWorkspace", "NSImage", "NSCell"] }
 objc2-core-foundation = { version = "0.3", features = ["std", "CFString", "CFArray", "CFBase", "CFNumber", "CFDictionary", "CFCGTypes"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "libc"] }

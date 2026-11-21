@@ -23,6 +23,7 @@ mod shared;
 mod spike_log;
 mod styles;
 mod theme;
+mod updates;
 
 use popup::Popup;
 use rune::{App, AppSpec, WindowOptions, WindowSpec};
@@ -91,5 +92,15 @@ fn start_native(popup: &rune::AppHandle<Popup>, settings: &rune::AppHandle<Setti
     }
     let (popup, settings) = (popup.clone(), settings.clone());
     // AppKit objects must be made on the main thread; updates run there.
-    popup.clone().update(move |_, _| mac::status::install(popup, settings));
+    popup.clone().update(move |_, _| {
+        let channel = if mac::updater::installed_by_homebrew() {
+            updates::UpdateChannel::Homebrew
+        } else if mac::updater::start() {
+            updates::UpdateChannel::Sparkle
+        } else {
+            updates::UpdateChannel::Manual
+        };
+        settings.update(move |ui, _| ui.update_channel = channel);
+        mac::status::install(popup, settings, channel);
+    });
 }

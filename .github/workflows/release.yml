@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+# One release at a time: each run rewrites the shared cask and appcast on main.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      # Repo variable (public key) and secret (private key). Without them the release has no
+      # automatic updates; Sparkle is not embedded rather than embedded without verification.
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install pinned Rust
+        run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets
+      - run: cargo test --locked
+      - name: Fetch Sparkle (only with a key)
+        if: env.SPARKLE_PUBLIC_KEY != '' && env.SPARKLE_PRIVATE_KEY != ''
+        run: |
+          # A separate assignment, so a failed download or checksum fails this step.
+          tools=$(sh scripts/sparkle-tools.sh)
+          echo "SPARKLE_TOOLS=$tools" >> "$GITHUB_ENV"
+      - name: Build bundle, DMG, ZIP, and checksums
+        run: |
+          if [ -n "${SPARKLE_TOOLS:-}" ]; then
+            export SPARKLE_FRAMEWORK="$SPARKLE_TOOLS/Sparkle.framework"
+          else
+            unset SPARKLE_PUBLIC_KEY
+          fi
+          sh scripts/release.sh
+      - name: Prepare current release notes
+        run: |
+          awk -v tag="$GITHUB_REF_NAME" '
+            NR == 1 && index($0, "## Retone " substr(tag, 2) " — ") != 1 { exit 1 }
+            /^## Retone / && ++sections > 1 { exit }
+            { print }
+          ' RELEASE_NOTES.md > target/release/notes.md
+      - name: Publish release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
+        with:
+          body_path: target/release/notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            target/release/assets/*.dmg
+            target/release/assets/*.zip
+            target/release/assets/SHA256SUMS
+      - name: Update cask and appcast on main
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          git fetch origin main
+          git checkout -B main origin/main
+          sh scripts/update-distribution.sh "$version" "${SPARKLE_TOOLS:-}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/retone.rb
+          # appcast.xml exists only after the first release signed for Sparkle.
+          if [ -f appcast.xml ]; then git add appcast.xml; fi
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: update cask and appcast for v$version [skip ci]"
+          git push origin main
