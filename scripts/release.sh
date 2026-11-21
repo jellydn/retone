@@ -26,7 +26,7 @@ cleanup() {
     rm -rf "$staging"
     return
   fi
-  rm -rf "$staging" "$staging.rw.dmg"
+  rm -rf "$staging" "$staging.rw.dmg" "$staging.mnt"
 }
 trap cleanup EXIT
 ditto "$app" "$staging/Retone.app"
@@ -36,7 +36,10 @@ cp assets/icon/AppIcon.icns "$staging/.VolumeIcon.icns"
 # copy; so make a writable image, set the flag on the mounted volume, then compress it.
 rw="$staging.rw.dmg"
 hdiutil create -volname Retone -srcfolder "$staging" -ov -format UDRW "$rw"
-mount=$(hdiutil attach -nobrowse -noautoopen "$rw" | tail -1 | cut -f3)
+# An explicit mount point: the last line of `hdiutil attach` differs between machines.
+mount="$staging.mnt"
+mkdir -p "$mount"
+hdiutil attach -nobrowse -noautoopen -mountpoint "$mount" "$rw" >/dev/null
 SetFile -a C "$mount"
 hdiutil detach -quiet "$mount"
 mount=""

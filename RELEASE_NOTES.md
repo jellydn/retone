@@ -1,8 +1,11 @@
-## Retone 0.1.0-beta.2 — 2026-11-21
+## Retone 0.1.0-beta.3 — 2026-11-21
+
+The v0.1.0-beta.2 tag failed to build and was never published, so this release carries its changes.
 
 - App icon, menu-bar icon and logo (the rewrite loop with a text cursor), also used as the DMG volume icon.
 - Switch provider and model from the popup: press ⌘P or click the provider label. Retone keeps the choice and asks for consent first for a new provider and model.
 - Fix: after a failed Replace, Retry or a style change no longer offers Replace again (it could insert the text twice).
+- Fix: the release build mounts its DMG at an explicit mount point (beta.2 failed there).
 - Homebrew: the cask uses `depends_on macos: :sonoma`; install needs `brew trust --cask jellydn/retone/retone`.
 
 Still ad-hoc signed without automatic updates: grant Accessibility again after updating. See the README for known limits.
