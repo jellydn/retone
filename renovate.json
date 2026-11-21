@@ -2,5 +2,23 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Rune and its patched crates share one git revision; a bump must move them together.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": [
+        "rune",
+        "rune-kit",
+        "rune-core",
+        "winit",
+        "sctk-adwaita",
+        "parley_engine",
+        "wgpu-hal",
+        "accesskit_windows",
+        "accesskit_macos"
+      ],
+      "groupName": "rune"
+    }
   ]
 }
