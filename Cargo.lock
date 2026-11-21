@@ -2656,7 +2656,7 @@ dependencies = [
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
  "rune",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf)",
  "rune-kit",
  "serde",
  "serde_json",
@@ -2721,12 +2721,12 @@ dependencies = [
  "png 0.18.1",
  "pollster",
  "raw-window-handle",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-edit",
  "rune-gpu",
  "rune-image",
  "rune-media",
- "rune-motion",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-spell",
  "rune-staging",
  "rune-taffy",
@@ -2758,12 +2758,31 @@ dependencies = [
 [[package]]
 name = "rune-core"
 version = "0.0.1"
+source = "git+https://github.com/anomalyco/rune?rev=44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf#44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf"
+dependencies = [
+ "js-sys",
+ "libc",
+ "portable-atomic",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf)",
+ "rustc-hash 2.1.3",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rune-core"
+version = "0.0.1"
 source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
 dependencies = [
  "js-sys",
  "libc",
  "portable-atomic",
- "rune-motion",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rustc-hash 2.1.3",
  "serde",
  "serde_json",
@@ -2781,7 +2800,7 @@ source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ea
 dependencies = [
  "js-sys",
  "parley",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-text",
  "serde_json",
  "unicode-segmentation",
@@ -2804,8 +2823,8 @@ dependencies = [
  "parking_lot",
  "pollster",
  "raw-window-metal",
- "rune-core",
- "rune-motion",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-staging",
  "wayland-client",
  "wayland-protocols",
@@ -2835,7 +2854,7 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "resvg",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "windows-sys 0.61.2",
@@ -2849,7 +2868,7 @@ dependencies = [
  "icu_normalizer",
  "rune",
  "rune-highlights",
- "rune-motion",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "unicode-segmentation",
 ]
 
@@ -2872,7 +2891,7 @@ dependencies = [
  "objc2-io-surface",
  "objc2-metal 0.3.2",
  "opuscule",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-gpu",
  "rune-image",
  "rune-staging",
@@ -2881,6 +2900,11 @@ dependencies = [
  "windows",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "rune-motion"
+version = "0.1.0"
+source = "git+https://github.com/anomalyco/rune?rev=44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf#44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf"
 
 [[package]]
 name = "rune-motion"
@@ -2895,7 +2919,7 @@ dependencies = [
  "js-sys",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rustc-hash 2.1.3",
  "spellbook",
  "unicode-segmentation",
@@ -2937,9 +2961,9 @@ dependencies = [
  "objc2-core-text",
  "parley",
  "parley_engine",
- "rune-core",
+ "rune-core 0.0.1 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rune-image",
- "rune-motion",
+ "rune-motion 0.1.0 (git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d)",
  "rustc-hash 2.1.3",
  "skrifa",
  "swash",
