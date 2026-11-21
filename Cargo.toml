@@ -8,9 +8,9 @@ publish = false
 
 [dependencies]
 # One Rune `dev` revision for Rune and every patch below; bump them together.
-rune = { git = "https://github.com/anomalyco/rune", rev = "44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf" }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf" }
-rune-core = { git = "https://github.com/anomalyco/rune", rev = "44920b1fdfe6d1b7156d80b90f0ca0d96080d2bf" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "8283dca577d3cd50949c940f6029bffe2aac847d" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "8283dca577d3cd50949c940f6029bffe2aac847d" }
+rune-core = { git = "https://github.com/anomalyco/rune", rev = "8283dca577d3cd50949c940f6029bffe2aac847d" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Plain HTTP only: the local provider accepts loopback endpoints, so TLS is never needed.
