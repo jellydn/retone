@@ -119,8 +119,9 @@ impl Target {
     /// before the paste.
     ///
     /// Chromium and Electron apps (Slack) report no focused element at all while their window is
-    /// not key, but the captured element still answers. Then the captured element is read again,
-    /// and the same range and text checks decide.
+    /// not key, but the captured element still answers, including its own `AXFocused`. Then the
+    /// captured element must still say it has focus (so ⌘V lands in it, not in another field of
+    /// the same app), and the same range and text checks decide.
     pub fn still_matches(&self, captured_text: &str) -> Result<(), &'static str> {
         // `same_object` is false on the fallback, so the text is always compared there: no focus
         // query proves that the field is still the one the user works in.
@@ -130,6 +131,9 @@ impl Target {
                 (now, same_object)
             }
             None => {
+                if !copy_bool(&self.element, "AXFocused").unwrap_or(false) {
+                    return Err("the field no longer has focus");
+                }
                 let range = selected_range(&self.element).ok_or("no focused element")?;
                 (Target { pid: self.pid, element: self.element.clone(), range: Some(range) }, false)
             }
@@ -169,6 +173,10 @@ fn copy_attribute(element: &AXUIElement, name: &str) -> Option<CFRetained<CFType
 
 fn copy_string(element: &AXUIElement, name: &str) -> Option<String> {
     Some(copy_attribute(element, name)?.downcast::<CFString>().ok()?.to_string())
+}
+
+fn copy_bool(element: &AXUIElement, name: &str) -> Option<bool> {
+    Some(copy_attribute(element, name)?.downcast::<CFBoolean>().ok()?.as_bool())
 }
 
 fn selected_range(element: &AXUIElement) -> Option<CFRange> {
