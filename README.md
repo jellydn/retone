@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/icon/logo-dark.svg">
+    <img src="assets/icon/logo-light.svg" alt="Retone" width="360">
+  </picture>
+</p>
+
 <h1 align="center">Welcome to Retone 👋</h1>
 
 <p align="center">
@@ -97,7 +104,7 @@ The pinned toolchain in `rust-toolchain.toml` installs through rustup.
 
 Retone reads the selection and pastes the rewrite with the macOS Accessibility API.
 
-1. Open **Settings → Permissions** from the **Rt** menu-bar item, and click **Open Accessibility Settings**.
+1. Open **Settings → Permissions** from the Retone menu-bar item, and click **Open Accessibility Settings**.
 2. Turn on **Retone** in **System Settings → Privacy & Security → Accessibility**.
 
 Without the permission, Retone works in **clipboard mode**: copy the text first, and Retone copies the rewrite back to the clipboard. It never pastes.
@@ -108,7 +115,7 @@ Without the permission, Retone works in **clipboard mode**: copy the text first,
 ## Usage
 
 1. Select text in any app.
-2. Press your hotkey (or choose **Rewrite Selection** from the **Rt** menu).
+2. Press your hotkey (or choose **Rewrite Selection** from the Retone menu-bar item).
 3. Pick a style with a number key, and wait for the preview.
 4. **Enter** replaces the selection, **⌘C** copies the rewrite, **⌘R** tries again, **Esc** cancels.
 
@@ -152,7 +159,6 @@ This beta is tested on macOS 27.2 on Apple Silicon only.
 - macOS 14 and 15, Intel Macs, displays with mixed scaling, and non-US keyboard layouts are not tested.
 - The Accessibility grant does not survive updates (ad hoc signing).
 - OpenCode with free hosted models is not tested.
-- No app icon yet; the menu-bar item shows **Rt**.
 
 ## 📝 Documentation
 

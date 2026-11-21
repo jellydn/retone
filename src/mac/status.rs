@@ -6,9 +6,9 @@ use crate::settings::{Page, SettingsUi};
 use crate::updates::UpdateChannel;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, Sel};
-use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{NSMenu, NSMenuItem, NSStatusBar, NSStatusItem, NSVariableStatusItemLength};
-use objc2_foundation::NSString;
+use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2_app_kit::{NSImage, NSMenu, NSMenuItem, NSStatusBar, NSStatusItem, NSVariableStatusItemLength};
+use objc2_foundation::{NSData, NSSize, NSString};
 use rune::AppHandle;
 use std::cell::RefCell;
 
@@ -81,13 +81,26 @@ thread_local! {
     static INSTALLED: RefCell<Option<(Retained<NSStatusItem>, Retained<MenuTarget>)>> = const { RefCell::new(None) };
 }
 
+/// The loop-and-cursor icon as a template image, so macOS tints it for light and dark menu bars.
+fn menu_bar_image() -> Option<Retained<NSImage>> {
+    let data = NSData::with_bytes(include_bytes!("../../assets/icon/menubar-template@2x.png"));
+    let image = NSImage::initWithData(NSImage::alloc(), &data)?;
+    // The PNG is 36 px for Retina; 18 pt is the menu-bar icon height.
+    image.setSize(NSSize::new(18.0, 18.0));
+    image.setTemplate(true);
+    Some(image)
+}
+
 /// Adds the menu-bar item. Call on the main thread, once.
 pub fn install(popup: AppHandle<Popup>, settings: AppHandle<SettingsUi>, channel: UpdateChannel) {
     let Some(mtm) = MainThreadMarker::new() else { return };
     let target = MenuTarget::new(mtm, Handles { popup, settings, channel });
     let item = NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
     if let Some(button) = item.button(mtm) {
-        button.setTitle(&NSString::from_str("Rt"));
+        match menu_bar_image() {
+            Some(image) => button.setImage(Some(&image)),
+            None => button.setTitle(&NSString::from_str("Rt")),
+        }
     }
     let menu = NSMenu::new(mtm);
     let entries: [(&str, Option<Sel>); 7] = [
