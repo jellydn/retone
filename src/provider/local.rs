@@ -193,10 +193,7 @@ pub fn rewrite(endpoint: &str, model: &str, key: Option<&ApiKey>, style: &Style,
         "model": model,
         "stream": false,
         "temperature": 0.2,
-        "messages": [
-            { "role": "system", "content": prompt.system },
-            { "role": "user", "content": prompt.user },
-        ],
+        "messages": messages(&prompt),
     });
     let mut request = agent(&endpoint).post(format!("{endpoint}/chat/completions"));
     if let Some(ApiKey(key)) = key {
@@ -214,6 +211,18 @@ pub fn rewrite(endpoint: &str, model: &str, key: Option<&ApiKey>, style: &Style,
         return Err("The model's answer was far longer than the text, so Retone dropped it.".into());
     }
     Ok(answer)
+}
+
+/// System, then the style's example as an earlier user/assistant turn, then the real text. Ollama
+/// and llama-server both accept this order.
+fn messages(prompt: &styles::Prompt) -> Value {
+    let mut messages = vec![json!({ "role": "system", "content": prompt.system })];
+    if let Some((input, answer)) = &prompt.example {
+        messages.push(json!({ "role": "user", "content": input }));
+        messages.push(json!({ "role": "assistant", "content": answer }));
+    }
+    messages.push(json!({ "role": "user", "content": prompt.user }));
+    Value::Array(messages)
 }
 
 /// The server's own message is short and names the model problem (llama-server: "Loading model"

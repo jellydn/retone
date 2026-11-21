@@ -122,7 +122,10 @@ fn a_rewrite_posts_the_exact_model_and_the_delimited_text() {
     let body: Value = serde_json::from_str(request.split("\r\n\r\n").nth(1).expect("body")).expect("json");
     assert_eq!(body["model"], "qwen2.5:0.5b");
     assert_eq!(body["stream"], false);
-    assert_eq!(body["messages"][1]["content"], "<text>\nthe meeting are moved\n</text>");
+    let roles: Vec<&str> =
+        body["messages"].as_array().expect("messages").iter().map(|m| m["role"].as_str().unwrap_or("")).collect();
+    assert_eq!(roles, ["system", "user", "assistant", "user"], "the style example comes before the text");
+    assert_eq!(body["messages"][3]["content"], "<text>\nthe meeting are moved\n</text>");
 }
 
 #[test]

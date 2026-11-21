@@ -269,7 +269,8 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
          your network: plain http is not encrypted, so use Tailscale or https on a shared network. The server \
          may log requests on its side."
     } else {
-        "Only addresses on this Mac are accepted. The server may log requests on its side."
+        "Only addresses on this Mac are accepted. The server may log requests on its side. Use a 3B model or \
+         larger, such as qwen2.5:3b: smaller models often ignore the style."
     };
     page.child(note(k, privacy))
 }
