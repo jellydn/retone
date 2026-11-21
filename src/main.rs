@@ -9,6 +9,7 @@ mod apply;
 #[cfg(target_os = "macos")]
 mod capture;
 mod config;
+mod eval;
 mod flow;
 mod input;
 #[cfg(target_os = "macos")]
@@ -32,6 +33,9 @@ use shared::Shared;
 use std::sync::Arc;
 
 fn main() {
+    if let Some(code) = eval::run_from_args() {
+        std::process::exit(code);
+    }
     let headless = rune::is_headless();
     let shared = Arc::new(Shared::new(!headless));
 
