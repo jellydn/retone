@@ -56,7 +56,9 @@ fn can_switch(p: &Popup) -> bool {
 
 fn header(p: &Popup, k: &Kit) -> El {
     let source = match &p.provider {
-        Some(provider) => format!("{} · {}", provider.kind().name(), provider.model()),
+        Some(provider) => {
+            format!("{} · {}", provider.kind().name(), crate::provider::local::short_model_name(provider.model()))
+        }
         None => "No provider".into(),
     };
     row()
@@ -82,7 +84,7 @@ fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
         List::new().active(Some(picker.selected)).empty_message("No provider is set up. Open Settings → Provider.");
     for (index, choice) in picker.choices.iter().enumerate() {
         list = list.item(
-            ListItem::new(format!("{}  {}", index + 1, choice.model()))
+            ListItem::new(format!("{}  {}", index + 1, crate::provider::local::short_model_name(choice.model())))
                 .group(choice.kind().name())
                 .selected(Some(choice) == p.provider.as_ref())
                 .on_select(move |p: &mut Popup, tx: &mut Tx| p.choose(index, tx)),

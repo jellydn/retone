@@ -21,6 +21,8 @@ pub struct Config {
     pub custom_style: String,
     pub provider: Option<Kind>,
     pub local_endpoint: String,
+    /// The user's opt-in for a Local AI server outside this Mac (LAN or Tailscale).
+    pub local_allow_network: bool,
     pub local_model: String,
     pub pi_model: String,
     pub opencode_model: String,
@@ -36,6 +38,7 @@ impl Config {
             custom_style: text("custom_style"),
             provider: prefs.get("provider"),
             local_endpoint: prefs.get("local_endpoint").unwrap_or_else(|| local::OLLAMA.to_string()),
+            local_allow_network: prefs.get("local_allow_network").unwrap_or(false),
             local_model: text("local_model"),
             pi_model: text("pi_model"),
             opencode_model: text("opencode_model"),
@@ -51,6 +54,7 @@ impl Config {
             ("custom_style", serde_json::json!(self.custom_style)),
             ("provider", serde_json::json!(self.provider)),
             ("local_endpoint", serde_json::json!(self.local_endpoint)),
+            ("local_allow_network", serde_json::json!(self.local_allow_network)),
             ("local_model", serde_json::json!(self.local_model)),
             ("pi_model", serde_json::json!(self.pi_model)),
             ("opencode_model", serde_json::json!(self.opencode_model)),
@@ -77,7 +81,7 @@ impl Config {
         match self.provider {
             None => Err("Choose a provider in Settings.".into()),
             Some(Kind::Local) => {
-                let endpoint = local::validate_endpoint(&self.local_endpoint)?;
+                let endpoint = local::validate_endpoint(&self.local_endpoint, self.local_allow_network)?;
                 let model = exact_model(&self.local_model, "Local AI")?;
                 Ok(Provider::Local { endpoint, model })
             }
@@ -104,7 +108,7 @@ impl Config {
             .into_iter()
             .filter_map(|kind| Config { provider: Some(kind), ..self.clone() }.provider().ok())
             .collect();
-        if let Ok(endpoint) = local::validate_endpoint(&self.local_endpoint) {
+        if let Ok(endpoint) = local::validate_endpoint(&self.local_endpoint, self.local_allow_network) {
             for model in local_models.iter().map(|m| m.trim()).filter(|m| !m.is_empty()) {
                 let listed = Provider::Local { endpoint: endpoint.clone(), model: model.to_string() };
                 if !all.contains(&listed) {
@@ -204,7 +208,11 @@ mod tests {
         let mut config = Config { provider: Some(Kind::Local), ..Config::default() };
         config.local_endpoint = "http://192.168.1.2:11434/v1".into();
         config.local_model = "qwen".into();
-        assert!(config.provider().is_err(), "non-loopback endpoint");
+        assert!(config.provider().is_err(), "a LAN address needs the opt-in");
+        config.local_allow_network = true;
+        assert!(config.provider().is_ok(), "a LAN address with the opt-in");
+        config.local_endpoint = "http://8.8.8.8:11434/v1".into();
+        assert!(config.provider().is_err(), "a public address even with the opt-in");
         config.local_endpoint = local::OLLAMA.into();
         assert!(config.provider().is_ok());
         config.provider = Some(Kind::Pi);

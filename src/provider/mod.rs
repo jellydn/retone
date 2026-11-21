@@ -1,4 +1,5 @@
-//! Providers: a local OpenAI-compatible endpoint on loopback, and the Pi and OpenCode CLIs.
+//! Providers: a local OpenAI-compatible endpoint (on this Mac, or on a private network after
+//! the user opts in), and the Pi and OpenCode CLIs.
 //!
 //! A closed list on purpose: Retone never guesses flags, switches tools or falls back to another
 //! provider. Every request is bounded (deadline, answer cap) and its errors are redacted.
@@ -74,7 +75,9 @@ impl Provider {
     /// Runs one rewrite. Blocking: call it from a worker, never the frame loop.
     pub fn rewrite(&self, style: &Style, text: &str, cancel: &Cancel, env: &Env) -> Outcome {
         match self {
-            Provider::Local { endpoint, model } => Outcome::answer(local::rewrite(endpoint, model, style, text)),
+            Provider::Local { endpoint, model } => {
+                Outcome::answer(local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text))
+            }
             Provider::Pi { model } => pi::rewrite(&env.pi_program, model, style, text, cancel, &env.home),
             Provider::OpenCode { model } => {
                 opencode::rewrite(&env.opencode_program, model, style, text, cancel, &env.home)
@@ -89,13 +92,15 @@ pub struct Env {
     pub home: PathBuf,
     pub pi_program: PathBuf,
     pub opencode_program: PathBuf,
+    /// The Local AI API key, read from the Keychain just before the request.
+    pub local_api_key: Option<local::ApiKey>,
 }
 
 impl Env {
     /// The user's home, with the CLIs found by name on `PATH` at run time.
     pub fn system() -> Option<Env> {
         let home = rune_core::env::var("HOME").map(PathBuf::from)?;
-        Some(Env { home, pi_program: "pi".into(), opencode_program: "opencode".into() })
+        Some(Env { home, pi_program: "pi".into(), opencode_program: "opencode".into(), local_api_key: None })
     }
 }
 
