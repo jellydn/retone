@@ -3,6 +3,7 @@
 
 use crate::popup::Popup;
 use crate::settings::{Page, SettingsUi};
+use crate::updates::UpdateChannel;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, Sel};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
@@ -14,6 +15,7 @@ use std::cell::RefCell;
 pub struct Handles {
     popup: AppHandle<Popup>,
     settings: AppHandle<SettingsUi>,
+    channel: UpdateChannel,
 }
 
 define_class!(
@@ -41,7 +43,12 @@ define_class!(
 
         #[unsafe(method(updates:))]
         fn updates(&self, _sender: Option<&AnyObject>) {
-            self.open_page(Page::Updates);
+            // Sparkle shows its own window; other channels explain themselves on the page.
+            if self.ivars().channel == UpdateChannel::Sparkle {
+                crate::mac::updater::check_now();
+            } else {
+                self.open_page(Page::Updates);
+            }
         }
 
         #[unsafe(method(quit:))]
@@ -75,9 +82,9 @@ thread_local! {
 }
 
 /// Adds the menu-bar item. Call on the main thread, once.
-pub fn install(popup: AppHandle<Popup>, settings: AppHandle<SettingsUi>) {
+pub fn install(popup: AppHandle<Popup>, settings: AppHandle<SettingsUi>, channel: UpdateChannel) {
     let Some(mtm) = MainThreadMarker::new() else { return };
-    let target = MenuTarget::new(mtm, Handles { popup, settings });
+    let target = MenuTarget::new(mtm, Handles { popup, settings, channel });
     let item = NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
     if let Some(button) = item.button(mtm) {
         button.setTitle(&NSString::from_str("Rt"));

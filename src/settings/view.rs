@@ -4,6 +4,7 @@ use super::{HotkeyTest, PAGES, Page, SettingsUi};
 use crate::provider::{Kind, local, opencode, pi};
 use crate::styles::PRESETS;
 use crate::theme;
+use crate::updates::UpdateChannel;
 use rune::{Cx, El, ScrollSpec, Shortcut, ShortcutError, Tx, col, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, Kit, SegmentedControl, ShortcutRecorder, TextInput, shortcut_error_message};
 
@@ -21,7 +22,7 @@ pub fn view(s: &SettingsUi, cx: &mut Cx<SettingsUi>) -> El {
         Page::Style => style_page(s, &k),
         Page::Privacy => privacy_page(s, &k),
         Page::Permissions => permissions_page(&k),
-        Page::Updates => updates_page(&k),
+        Page::Updates => updates_page(s, &k),
     };
     col()
         .key("settings")
@@ -338,10 +339,23 @@ fn permissions_page(k: &Kit) -> El {
         ))
 }
 
-fn updates_page(k: &Kit) -> El {
-    col()
+fn updates_page(s: &SettingsUi, k: &Kit) -> El {
+    let page = col()
         .w_full()
         .gap(10.0)
         .child(heading(k, "Updates"))
-        .child(note(k, format!("Retone {}. Update checks arrive with the first release.", env!("CARGO_PKG_VERSION"))))
+        .child(note(k, format!("Retone {}.", env!("CARGO_PKG_VERSION"))))
+        .child(note(k, s.update_channel.summary()));
+    if s.update_channel != UpdateChannel::Sparkle {
+        return page;
+    }
+    page.child(
+        Button::new("Check Now")
+            .variant(ButtonVariant::Outline)
+            .on_press(|_: &mut SettingsUi| {
+                #[cfg(target_os = "macos")]
+                crate::mac::updater::check_now();
+            })
+            .build(k),
+    )
 }
