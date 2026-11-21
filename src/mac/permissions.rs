@@ -9,6 +9,11 @@ use objc2_foundation::{NSString, NSURL};
 const ACCESSIBILITY_PANE: &str = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
 pub fn open_accessibility_settings() -> bool {
-    let Some(url) = NSURL::URLWithString(&NSString::from_str(ACCESSIBILITY_PANE)) else { return false };
+    open_url(ACCESSIBILITY_PANE)
+}
+
+/// Opens a link in its default app (System Settings panes, release notes in the browser).
+pub fn open_url(link: &str) -> bool {
+    let Some(url) = NSURL::URLWithString(&NSString::from_str(link)) else { return false };
     NSWorkspace::sharedWorkspace().openURL(&url)
 }

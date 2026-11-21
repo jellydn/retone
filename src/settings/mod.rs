@@ -1,9 +1,12 @@
-//! The Settings window: shortcut, provider, style and theme, privacy, permissions, updates.
+//! The Settings window: a sidebar of pages (General, Provider, Styles, Privacy), each a card of
+//! rows, with the version and updates in the sidebar footer.
 //!
 //! Every change is validated before it is saved: a hotkey only after it registers, a provider
 //! only when its endpoint is allowed (this Mac, or a private network after the opt-in) and its
 //! model ID exact.
 
+mod icons;
+mod rows;
 pub mod view;
 
 use crate::config::Config;
@@ -18,22 +21,21 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Page {
     #[default]
-    Shortcut,
+    General,
     Provider,
-    Style,
+    Styles,
     Privacy,
-    Permissions,
-    Updates,
 }
 
-pub const PAGES: [(Page, &str); 6] = [
-    (Page::Shortcut, "Shortcut"),
-    (Page::Provider, "Provider"),
-    (Page::Style, "Style"),
-    (Page::Privacy, "Privacy"),
-    (Page::Permissions, "Permissions"),
-    (Page::Updates, "Updates"),
-];
+pub const PAGES: [(Page, &str); 4] =
+    [(Page::General, "General"), (Page::Provider, "Provider"), (Page::Styles, "Styles"), (Page::Privacy, "Privacy")];
+
+/// A page under a row with ›: only fields too long for a row get one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubPage {
+    Address,
+    CustomStyle,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HotkeyTest {
@@ -48,6 +50,14 @@ const POPUP_CHORDS: [&str; 3] = ["super+c", "super+r", "super+p"];
 
 pub struct SettingsUi {
     pub page: Page,
+    pub sub_page: Option<SubPage>,
+    /// The "Advanced" fold under the page's card.
+    pub advanced_open: bool,
+    /// The key of the dropdown whose list is open, if any.
+    pub open_select: Option<&'static str>,
+    /// What macOS says, read when the window opens; Retone does not keep its own copy.
+    pub launch_at_login: bool,
+    pub login_error: Option<String>,
     pub config: Config,
     pub recorder: ShortcutRecorderState,
     pub hotkey_test: HotkeyTest,
@@ -89,6 +99,11 @@ impl SettingsUi {
         let config = shared.config();
         let mut ui = SettingsUi {
             page: Page::default(),
+            sub_page: None,
+            advanced_open: false,
+            open_select: None,
+            launch_at_login: false,
+            login_error: None,
             recorder: ShortcutRecorderState::new(config.hotkey.as_deref().and_then(|h| h.parse().ok())),
             hotkey_test: HotkeyTest::Idle,
             conflict_owner: None,
@@ -113,7 +128,43 @@ impl SettingsUi {
             registration: None,
         };
         ui.refresh_disabled();
+        ui.refresh_launch_at_login();
         ui
+    }
+
+    /// A sidebar press: the new page opens at its top, with no fold or list left open.
+    pub fn select_page(&mut self, page: Page) {
+        self.page = page;
+        self.sub_page = None;
+        self.advanced_open = false;
+        self.open_select = None;
+    }
+
+    pub fn toggle_select(&mut self, key: &'static str) {
+        self.open_select = if self.open_select == Some(key) { None } else { Some(key) };
+    }
+
+    /// Only a running app asks macOS: headless renders and tests have no bundle to register.
+    pub fn refresh_launch_at_login(&mut self) {
+        #[cfg(target_os = "macos")]
+        if self.popup.is_some() {
+            self.launch_at_login = crate::mac::login::is_enabled();
+        }
+    }
+
+    /// In headless renders and tests the switch only flips: there is no bundle to register.
+    pub fn set_launch_at_login(&mut self, on: bool) {
+        #[cfg(target_os = "macos")]
+        let result = if self.popup.is_some() { crate::mac::login::set_enabled(on) } else { Ok(()) };
+        #[cfg(not(target_os = "macos"))]
+        let result: Result<(), String> = Ok(());
+        match result {
+            Ok(()) => {
+                self.launch_at_login = on;
+                self.login_error = None;
+            }
+            Err(error) => self.login_error = Some(error),
+        }
     }
 
     pub fn set_waker(&mut self, waker: rune::Waker) {
@@ -262,6 +313,7 @@ impl SettingsUi {
     pub fn save_custom_style(&mut self) {
         self.config.custom_style = self.custom_style.text.trim().to_string();
         self.save();
+        self.sub_page = None;
     }
 
     pub fn set_theme(&mut self, theme: crate::theme::Theme) {
@@ -301,7 +353,10 @@ impl SettingsUi {
 type Scene = (&'static str, fn(&mut SettingsUi));
 
 pub const SCENES: &[Scene] = &[
-    ("shortcut-recorded", |s| s.recorder = ShortcutRecorderState::new("alt+super+r".parse().ok())),
+    ("general", |s| s.recorder = ShortcutRecorderState::new("alt+super+r".parse().ok())),
+    ("general-advanced", |s| s.advanced_open = true),
+    ("general-theme-open", |s| s.open_select = Some("theme")),
+    ("general-light", |s| s.config.theme = crate::theme::Theme::Light),
     ("provider-local", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::Local);
@@ -323,15 +378,26 @@ pub const SCENES: &[Scene] = &[
         s.local_model = TextEdit::new("/Users/me/models/qwen2.5-3b-instruct-q4_k_m.gguf");
         s.listed_models = Some(Ok(vec!["/Users/me/models/qwen2.5-3b-instruct-q4_k_m.gguf".into()]));
     }),
+    ("provider-address", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.sub_page = Some(SubPage::Address);
+    }),
     ("provider-opencode", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::OpenCode);
         s.opencode_model = TextEdit::new("opencode/beam-free");
         s.provider_status = Some(Ok("Saved: OpenCode · opencode/beam-free".into()));
+        s.advanced_open = true;
     }),
-    ("style", |s| s.page = Page::Style),
-    ("style-lotus", |s| {
-        s.page = Page::Style;
+    ("styles", |s| s.page = Page::Styles),
+    ("styles-custom", |s| {
+        s.page = Page::Styles;
+        s.sub_page = Some(SubPage::CustomStyle);
+        s.custom_style = TextEdit::new("Make it friendly and short.");
+    }),
+    ("styles-lotus", |s| {
+        s.page = Page::Styles;
         s.config.theme = crate::theme::Theme::KanagawaLotus;
     }),
     ("privacy-adapter-disabled", |s| {
@@ -343,8 +409,6 @@ pub const SCENES: &[Scene] = &[
                 .into(),
         )];
     }),
-    ("permissions", |s| s.page = Page::Permissions),
-    ("updates", |s| s.page = Page::Updates),
 ];
 
 #[cfg(test)]

@@ -105,7 +105,7 @@ The pinned toolchain in `rust-toolchain.toml` installs through rustup.
 
 Retone reads the selection and pastes the rewrite with the macOS Accessibility API.
 
-1. Open **Settings → Permissions** from the Retone menu-bar item, and click **Open Accessibility Settings**.
+1. Open **Settings → General** from the Retone menu-bar item, and click **Open Settings** in the **Accessibility** row.
 2. Turn on **Retone** in **System Settings → Privacy & Security → Accessibility**.
 
 Without the permission, Retone works in **clipboard mode**: copy the text first, and Retone copies the rewrite back to the clipboard. It never pastes.
@@ -125,14 +125,14 @@ Retone does not run when Retone itself is in front, and refuses selections longe
 
 ## Settings
 
-| Page        | What it does                                                                                   |
-| ----------- | ---------------------------------------------------------------------------------------------- |
-| Shortcut    | Record a global hotkey. Retone refuses chords that another app holds or that the popup needs.  |
-| Provider    | Choose Local, Pi or OpenCode, set the endpoint and the exact model ID, and save.               |
-| Style       | Default style and your custom instruction.                                                     |
-| Privacy     | The no-history rules, **Revoke all consent**, and turning an adapter on again after the guard. |
-| Permissions | Accessibility status and a link to System Settings.                                            |
-| Updates     | Version and the update channel (Homebrew, Sparkle, or manual).                                 |
+Settings has a sidebar of pages. Each page is one card of rows, with rarely used settings under **Advanced**. The sidebar footer shows **What's new**, the version, and how this copy updates.
+
+| Page     | What it does                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------- |
+| General  | Record the global hotkey and test it, default style, theme, Accessibility status, and **Launch at login**.          |
+| Provider | Choose Local AI, Pi or OpenCode. For Local AI: address (with presets), LAN and Tailscale switch, API key and model. |
+| Styles   | Default style and your custom instruction.                                                                          |
+| Privacy  | The no-history rules, **Revoke all** consent, and turning an adapter on again after the guard.                      |
 
 ## Providers and the no-history rules
 
@@ -163,7 +163,7 @@ By default, Retone sends text only to a server on this Mac (`127.0.0.1`, `localh
 llama-server -m ~/models/qwen2.5-3b-instruct-q4_k_m.gguf --host 0.0.0.0 --port 8080 --api-key "$(openssl rand -hex 16)"
 ```
 
-- Choose the **llama.cpp** preset (or your server's LAN or Tailscale address), then **List models**. llama-server serves one model and reports its file path as the ID; Retone shows only the file name. Add `--alias qwen2.5-3b` for a shorter name.
+- Choose the **llama.cpp** preset (or your server's LAN or Tailscale address), then **List** in the **Model** row. llama-server serves one model and reports its file path as the ID; Retone shows only the file name. Add `--alias qwen2.5-3b` for a shorter name.
 - With `--api-key`, paste the key in **API key** and click **Save**. Retone keeps it in the macOS Keychain (not in its settings file) and sends it as `Authorization: Bearer …`. Without the key, Retone says that the server needs one.
 - Use `--host 0.0.0.0` only together with `--api-key` or on Tailscale: without a key, anyone on your network can use the server.
 

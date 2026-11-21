@@ -33,21 +33,21 @@ define_class!(
 
         #[unsafe(method(settings:))]
         fn settings(&self, _sender: Option<&AnyObject>) {
-            self.open_page(Page::Shortcut);
+            self.open_page(Page::General);
         }
 
         #[unsafe(method(permissions:))]
         fn permissions(&self, _sender: Option<&AnyObject>) {
-            self.open_page(Page::Permissions);
+            self.open_page(Page::General);
         }
 
         #[unsafe(method(updates:))]
         fn updates(&self, _sender: Option<&AnyObject>) {
-            // Sparkle shows its own window; other channels explain themselves on the page.
+            // Sparkle shows its own window; the sidebar footer explains the other channels.
             if self.ivars().channel == UpdateChannel::Sparkle {
                 crate::mac::updater::check_now();
             } else {
-                self.open_page(Page::Updates);
+                self.open_page(Page::General);
             }
         }
 
@@ -68,8 +68,9 @@ impl MenuTarget {
     fn open_page(&self, page: Page) {
         let settings = &self.ivars().settings;
         settings.update(move |ui, _| {
-            ui.page = page;
+            ui.select_page(page);
             ui.refresh_disabled();
+            ui.refresh_launch_at_login();
         });
         settings.open();
     }

@@ -63,7 +63,7 @@ fn main() {
         scenes: settings::SCENES,
         setup: Some(SettingsUi::set_waker),
         poll: Some(|s, _, _| s.poll()),
-        ..AppSpec::new("Retone Settings", (620.0, 520.0), SettingsUi::default, settings::view::view)
+        ..AppSpec::new("Retone Settings", (820.0, 560.0), SettingsUi::default, settings::view::view)
     };
     let hidden = WindowOptions { visible: false, ..Default::default() };
     let (settings, _settings_window) = app.window(WindowSpec::new("settings", settings_spec).options(hidden));
