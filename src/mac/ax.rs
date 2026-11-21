@@ -117,8 +117,23 @@ impl Target {
     /// popup holds key focus during Replace, so system-wide AX reports Retone as the focused app.
     /// The caller checks the frontmost app separately, after this, so that check is the last one
     /// before the paste.
+    ///
+    /// Chromium and Electron apps (Slack) report no focused element at all while their window is
+    /// not key, but the captured element still answers. Then the captured element is read again,
+    /// and the same range and text checks decide.
     pub fn still_matches(&self, captured_text: &str) -> Result<(), &'static str> {
-        let now = Target::focused_in(self.pid).ok_or("no focused element")?;
+        // `same_object` is false on the fallback, so the text is always compared there: no focus
+        // query proves that the field is still the one the user works in.
+        let (now, same_object) = match Target::focused_in(self.pid) {
+            Some(now) => {
+                let same_object = now.element == self.element;
+                (now, same_object)
+            }
+            None => {
+                let range = selected_range(&self.element).ok_or("no focused element")?;
+                (Target { pid: self.pid, element: self.element.clone(), range: Some(range) }, false)
+            }
+        };
         let same_range = match (self.range, now.range) {
             (Some(a), Some(b)) => a.location == b.location && a.length == b.length,
             (None, None) => true,
@@ -127,10 +142,10 @@ impl Target {
         if !same_range {
             return Err("the selection range moved");
         }
-        if now.element == self.element {
+        if same_object {
             return Ok(());
         }
-        // A different element object: accept it only if it still holds the captured selection.
+        // Not proven the same object: accept it only if it still holds the captured selection.
         match now.selected_text() {
             Some(text) if text == captured_text => Ok(()),
             Some(_) => Err("the selected text differs"),
