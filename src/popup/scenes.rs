@@ -14,6 +14,11 @@ const REWRITE: &str = "Hi team, the meeting has moved to Tuesday. Please update 
 
 fn with_provider(p: &mut Popup) {
     p.provider = Some(Provider::Local { endpoint: crate::provider::local::OLLAMA.into(), model: "qwen2.5:7b".into() });
+    // Settings as saved, so ⌘P in a `--script` run has providers to offer.
+    p.config.provider = Some(crate::provider::Kind::Local);
+    p.config.local_model = "qwen2.5:7b".into();
+    p.config.local_endpoint = crate::provider::local::OLLAMA.into();
+    p.config.pi_model = "anthropic/claude-haiku-5-5".into();
 }
 
 fn previewing(p: &mut Popup, phase: Phase, can_replace: bool) {
@@ -60,6 +65,17 @@ pub const SCENES: &[Scene] = &[
                 .into(),
         );
         p.flow.state = State::Notice(Notice::NoProvider);
+    }),
+    ("provider-picker", |p| {
+        previewing(p, Phase::Ready(REWRITE.into()), true);
+        let local =
+            |model: &str| Provider::Local { endpoint: crate::provider::local::OLLAMA.into(), model: model.into() };
+        let choices = vec![
+            local("qwen2.5:7b"),
+            local("llama3.2:1b"),
+            Provider::Pi { model: "anthropic/claude-haiku-5-5".into() },
+        ];
+        p.picker = Some(super::Picker { choices, selected: 2, listing: false });
     }),
     ("consent-example", |p| {
         p.provider = Some(Provider::OpenCode { model: "opencode/beam-free".into() });

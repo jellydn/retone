@@ -27,7 +27,7 @@ macOS ties the Accessibility grant to the exact signature of the app. An ad-hoc 
 1. Open **System Settings → Privacy & Security → Accessibility**.
 2. Select **Retone** and click **−** to remove it.
 3. Click **+** and add `/Applications/Retone.app` again (or open Retone and use **Settings → Permissions**).
-4. Quit Retone from the **Rt** menu and open it again.
+4. Quit Retone from its menu-bar item and open it again.
 
 ## The popup opens at the mouse pointer, not at the text
 

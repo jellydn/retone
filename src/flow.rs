@@ -79,6 +79,11 @@ pub enum Event {
     },
     Retry,
     ChangeStyle(Style),
+    /// The user picked another provider or model in the popup. `consented` says whether that
+    /// provider and model already have consent.
+    ProviderChanged {
+        consented: bool,
+    },
     Replace,
     Copy,
     Applied {
@@ -152,6 +157,18 @@ impl Flow {
                 let (state, effects) = self.request(original, style);
                 (state, with_cancel_if_loading(&phase, effects))
             }
+            (State::Previewing { original, style, phase, .. }, Event::ProviderChanged { consented: true }) => {
+                let (state, effects) = self.request(original, style);
+                (state, with_cancel_if_loading(&phase, effects))
+            }
+            // Nothing is sent to a provider and model without its own consent.
+            (State::Previewing { original, style, phase, .. }, Event::ProviderChanged { consented: false }) => {
+                let effects = if phase == Phase::Loading { Effects::one(CancelRequest) } else { Effects::none() };
+                (State::AwaitingConsent { original, style }, effects)
+            }
+            (State::AwaitingConsent { original, style }, Event::ProviderChanged { consented: true }) => {
+                self.request(original, style)
+            }
             (
                 State::Previewing { original, style, phase: Phase::Ready(rewrite), can_replace: true, .. },
                 Event::Replace,
@@ -171,8 +188,10 @@ impl Flow {
                 Event::Applied { attempt: a, result: Err(error) },
             ) if attempt == a => {
                 // Replace refused or failed: keep the rewrite so Copy still works, but do not
-                // offer Replace again; a second try could insert the text twice.
+                // offer Replace again, not even after Retry or a new style or provider: a second
+                // try could insert the text twice. Only a new capture allows it again.
                 self.apply_error = Some(error);
+                self.can_replace = false;
                 let phase = Phase::Ready(rewrite);
                 (State::Previewing { attempt, original, style, phase, can_replace: false }, Effects::none())
             }

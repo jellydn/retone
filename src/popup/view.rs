@@ -6,7 +6,7 @@ use crate::flow::{Event, Notice, Phase, State};
 use crate::provider::consent;
 use crate::styles::{PRESETS, Style};
 use rune::{Cx, El, ScrollSpec, Tx, col, el, row, spacer, text};
-use rune_kit::{Button, ButtonVariant, Kit, Spinner};
+use rune_kit::{Button, ButtonVariant, Kit, List, ListItem, Spinner};
 
 /// The styles the picker offers, in key order 1–5: the presets, then Custom when it is set.
 pub fn styles(config: &Config) -> Vec<Style> {
@@ -19,14 +19,9 @@ pub fn styles(config: &Config) -> Vec<Style> {
 
 pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
     let k = p.config.theme.kit(cx.system_dark());
-    let body = match &p.flow.state {
-        State::Idle | State::Capturing { .. } => loading(&k, "Reading the selection…"),
-        State::Notice(notice) => notice_body(p, &k, notice),
-        State::AwaitingConsent { .. } => consent_body(p, &k),
-        State::Previewing { original, style, phase, can_replace, .. } => {
-            preview_body(p, &k, original, style, phase, *can_replace)
-        }
-        State::Applying { .. } => loading(&k, "Replacing…"),
+    let body = match (&p.picker, &p.flow.state) {
+        (Some(picker), _) => picker_body(p, &k, picker),
+        (None, state) => state_body(p, &k, state),
     };
     col()
         .key("popup")
@@ -42,6 +37,23 @@ pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
         .child(body)
 }
 
+fn state_body(p: &Popup, k: &Kit, state: &State) -> El {
+    match state {
+        State::Idle | State::Capturing { .. } => loading(k, "Reading the selection…"),
+        State::Notice(notice) => notice_body(p, k, notice),
+        State::AwaitingConsent { .. } => consent_body(p, k),
+        State::Previewing { original, style, phase, can_replace, .. } => {
+            preview_body(p, k, original, style, phase, *can_replace)
+        }
+        State::Applying { .. } => loading(k, "Replacing…"),
+    }
+}
+
+/// Whether the provider list can open now; the header label is a button only then.
+fn can_switch(p: &Popup) -> bool {
+    matches!(p.flow.state, State::Previewing { .. } | State::AwaitingConsent { .. })
+}
+
 fn header(p: &Popup, k: &Kit) -> El {
     let source = match &p.provider {
         Some(provider) => format!("{} · {}", provider.kind().name(), provider.model()),
@@ -54,7 +66,48 @@ fn header(p: &Popup, k: &Kit) -> El {
         .center_y()
         .child(text("Retone").font(k.ty.ui_medium).color(k.c.text_strong))
         .child(spacer())
-        .child(text(source).font(k.ty.text_xsmall).color(k.c.text_muted).max_lines(1))
+        .child(if can_switch(p) {
+            Button::new(format!("{source} ▾"))
+                .variant(ButtonVariant::GhostMuted)
+                .shortcut("⌘P")
+                .on_press(|p: &mut Popup| p.toggle_picker())
+                .build(k)
+        } else {
+            text(source).font(k.ty.text_xsmall).color(k.c.text_muted).max_lines(1)
+        })
+}
+
+fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
+    let mut list =
+        List::new().active(Some(picker.selected)).empty_message("No provider is set up. Open Settings → Provider.");
+    for (index, choice) in picker.choices.iter().enumerate() {
+        list = list.item(
+            ListItem::new(format!("{}  {}", index + 1, choice.model()))
+                .group(choice.kind().name())
+                .selected(Some(choice) == p.provider.as_ref())
+                .on_select(move |p: &mut Popup, tx: &mut Tx| p.choose(index, tx)),
+        );
+    }
+    let hint = if picker.listing {
+        "Loading local models…   ↑↓ choose   ⏎ use   Esc back"
+    } else {
+        "↑↓ choose   ⏎ use   Esc back"
+    };
+    col()
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .gap(8.0)
+        .child(
+            col()
+                .key("providers")
+                .w_full()
+                .grow(1.0)
+                .min_h(0.0)
+                .scroll(ScrollSpec { stick_bottom: false })
+                .child(list.build(k)),
+        )
+        .child(text(hint).font(k.ty.text_xsmall).color(k.c.text_muted))
 }
 
 fn loading(k: &Kit, label: &str) -> El {

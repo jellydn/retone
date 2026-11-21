@@ -43,7 +43,7 @@ pub enum HotkeyTest {
 }
 
 /// Popup keys a global shortcut must not take, or the popup could not use them.
-const POPUP_CHORDS: [&str; 2] = ["super+c", "super+r"];
+const POPUP_CHORDS: [&str; 3] = ["super+c", "super+r", "super+p"];
 
 pub struct SettingsUi {
     pub page: Page,
@@ -196,6 +196,19 @@ impl SettingsUi {
             self.save();
         }
         self.provider_status = Some(checked);
+    }
+
+    /// The popup saved another provider: show the saved choice and its model. Only that
+    /// provider's model field changes, so unsaved edits in the others stay.
+    pub fn reload_choice(&mut self, kind: Kind) {
+        self.config = self.shared.config();
+        self.provider_choice = self.config.provider;
+        let (field, model) = match kind {
+            Kind::Local => (&mut self.local_model, &self.config.local_model),
+            Kind::Pi => (&mut self.pi_model, &self.config.pi_model),
+            Kind::OpenCode => (&mut self.opencode_model, &self.config.opencode_model),
+        };
+        *field = TextEdit::new(model);
     }
 
     pub fn list_local_models(&mut self) {

@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "retone"
-version = "0.1.0-beta.1"
+version = "0.1.0-beta.2"
 dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",

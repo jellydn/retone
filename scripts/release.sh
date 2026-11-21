@@ -19,10 +19,29 @@ assets=target/release/assets
 rm -rf "$assets"
 mkdir -p "$assets"
 staging=$(mktemp -d target/release/dmg-root.XXXXXX)
-trap 'rm -rf "$staging"' EXIT
+mount=""
+# On failure, detach the writable image before deleting it; keep it if it cannot be detached.
+cleanup() {
+  if [ -n "$mount" ] && ! hdiutil detach -quiet "$mount"; then
+    rm -rf "$staging"
+    return
+  fi
+  rm -rf "$staging" "$staging.rw.dmg"
+}
+trap cleanup EXIT
 ditto "$app" "$staging/Retone.app"
 ln -s /Applications "$staging/Applications"
-hdiutil create -volname Retone -srcfolder "$staging" -ov -format UDZO "$assets/Retone-$version.dmg"
+cp assets/icon/AppIcon.icns "$staging/.VolumeIcon.icns"
+# The volume icon needs the custom-icon flag on the volume root, which -srcfolder does not
+# copy; so make a writable image, set the flag on the mounted volume, then compress it.
+rw="$staging.rw.dmg"
+hdiutil create -volname Retone -srcfolder "$staging" -ov -format UDRW "$rw"
+mount=$(hdiutil attach -nobrowse -noautoopen "$rw" | tail -1 | cut -f3)
+SetFile -a C "$mount"
+hdiutil detach -quiet "$mount"
+mount=""
+hdiutil convert "$rw" -ov -format UDZO -o "$assets/Retone-$version.dmg"
+rm -f "$rw"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$assets/Retone-$version.zip"
 (
   cd "$assets"

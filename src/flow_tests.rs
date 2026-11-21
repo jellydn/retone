@@ -164,3 +164,50 @@ fn a_style_change_rewrites_the_same_original_with_the_new_style() {
         "no CancelRequest when nothing is loading: {out:?}"
     );
 }
+
+#[test]
+fn a_provider_change_asks_consent_first_and_drops_the_old_answer() {
+    let mut flow = Flow::new(Style::Clear);
+    let first = start(&mut flow, "text");
+    flow.step(Event::ChangeStyle(Style::Technical));
+    let loading = match &flow.state {
+        State::Previewing { attempt, .. } => *attempt,
+        other => panic!("expected Previewing, got {other:?}"),
+    };
+    // Switched while loading to a provider without consent: stop the old request, send nothing.
+    let out = effects(flow.step(Event::ProviderChanged { consented: false }));
+    assert_eq!(out, vec![Effect::CancelRequest]);
+    assert!(matches!(&flow.state, State::AwaitingConsent { style: Style::Technical, .. }));
+    flow.step(Event::Answer { attempt: loading, result: Ok("from the old provider".into()) });
+    flow.step(Event::Answer { attempt: first, result: Ok("older still".into()) });
+    assert!(matches!(&flow.state, State::AwaitingConsent { .. }), "late answers must not show");
+
+    let out = effects(flow.step(Event::ConsentGiven));
+    assert!(
+        matches!(&out[..], [Effect::Request { text, style: Style::Technical, .. }, Effect::SaveConsent] if text == "text")
+    );
+}
+
+#[test]
+fn a_provider_change_with_consent_rewrites_the_same_text_and_style_again() {
+    let mut flow = Flow::new(Style::Concise);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Ok("Rewrite".into()) });
+    let out = effects(flow.step(Event::ProviderChanged { consented: true }));
+    assert!(matches!(&out[..], [Effect::Request { text, style: Style::Concise, .. }] if text == "text"), "{out:?}");
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Loading, .. }));
+}
+
+#[test]
+fn after_a_failed_replace_no_later_rewrite_offers_replace() {
+    let mut flow = Flow::new(Style::Clear);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Ok("Rewrite".into()) });
+    let Effect::Apply { attempt: apply, .. } = effects(flow.step(Event::Replace))[0].clone() else { panic!() };
+    flow.step(Event::Applied { attempt: apply, result: Err("the selection changed".into()) });
+    for event in [Event::Retry, Event::ChangeStyle(Style::Concise), Event::ProviderChanged { consented: true }] {
+        let Effect::Request { attempt, .. } = effects(flow.step(event))[0].clone() else { panic!() };
+        flow.step(Event::Answer { attempt, result: Ok("Again".into()) });
+        assert!(effects(flow.step(Event::Replace)).is_empty(), "Replace must stay off after a failed apply");
+    }
+}
