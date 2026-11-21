@@ -180,6 +180,18 @@ fn advanced(s: &SettingsUi, k: &Kit, rows: Vec<El>) -> El {
     col().key("advanced").w_full().gap(8.0).child(header).children(open.then(|| card(k, "advanced-card", rows)))
 }
 
+/// A row's switch. On a light card the kit's off track (`layer_04`) is nearly the card's white,
+/// so light themes draw it with the border colour instead.
+fn row_switch(k: &Kit, on: bool, flip: impl Fn(&mut SettingsUi) + 'static) -> El {
+    let switch = Switch::new(on).on_toggle(flip);
+    if k.dark {
+        return switch.build(k);
+    }
+    let mut light = k.clone();
+    light.c.layer_04 = k.c.border_strong;
+    switch.build(&light)
+}
+
 fn status_line(k: &Kit, result: &Result<String, String>) -> El {
     let (body, color) = match result {
         Ok(body) => (body.clone(), k.c.success.fg),
@@ -266,9 +278,7 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         Some(error) => Some((error.clone(), k.c.danger.fg)),
         None => help(k, "Open Retone when you log in to this Mac."),
     };
-    let login = Switch::new(s.launch_at_login)
-        .on_toggle(|s: &mut SettingsUi| s.set_launch_at_login(!s.launch_at_login))
-        .build(k);
+    let login = row_switch(k, s.launch_at_login, |s: &mut SettingsUi| s.set_launch_at_login(!s.launch_at_login));
     col()
         .w_full()
         .gap(16.0)
@@ -393,8 +403,7 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
     } else {
         "Off: only addresses on this Mac."
     };
-    let network =
-        Switch::new(s.allow_network).on_toggle(|s: &mut SettingsUi| s.allow_network = !s.allow_network).build(k);
+    let network = row_switch(k, s.allow_network, |s: &mut SettingsUi| s.allow_network = !s.allow_network);
     let key_placeholder = if s.api_key_saved { "Saved in the Keychain" } else { "Optional" };
     let mut key_control = row().gap(6.0).center_y().child(
         TextInput::new(&s.api_key)
