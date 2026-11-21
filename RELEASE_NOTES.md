@@ -1,3 +1,14 @@
+## Retone 0.1.0-beta.2 — 2026-11-21
+
+- App icon, menu-bar icon and logo (the rewrite loop with a text cursor), also used as the DMG volume icon.
+- Switch provider and model from the popup: press ⌘P or click the provider label. Retone keeps the choice and asks for consent first for a new provider and model.
+- Fix: after a failed Replace, Retry or a style change no longer offers Replace again (it could insert the text twice).
+- Homebrew: the cask uses `depends_on macos: :sonoma`; install needs `brew trust --cask jellydn/retone/retone`.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating. See the README for known limits.
+
+Install (run `brew update` first): `brew tap jellydn/retone https://github.com/jellydn/retone && brew trust --cask jellydn/retone/retone && brew install --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.1 — 2026-11-21
 
 First beta. Retone rewrites the selected text in any app with your own hotkey.
