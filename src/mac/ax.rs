@@ -47,8 +47,19 @@ impl Target {
         let system = unsafe { AXUIElement::new_system_wide() };
         set_timeout(&system);
         let app = copy_attribute(&system, "AXFocusedApplication")?.downcast::<AXUIElement>().ok()?;
-        set_timeout(&app);
-        let element = copy_attribute(&app, "AXFocusedUIElement")?.downcast::<AXUIElement>().ok()?;
+        Target::focused_in_app(&app)
+    }
+
+    /// The focused element inside the app with this pid, whichever app has key focus now.
+    pub fn focused_in(pid: i32) -> Option<Target> {
+        // SAFETY: creates an AX element for a pid; an exited process only makes later calls fail.
+        let app = unsafe { AXUIElement::new_application(pid) };
+        Target::focused_in_app(&app)
+    }
+
+    fn focused_in_app(app: &AXUIElement) -> Option<Target> {
+        set_timeout(app);
+        let element = copy_attribute(app, "AXFocusedUIElement")?.downcast::<AXUIElement>().ok()?;
         set_timeout(&element);
         let mut pid = 0;
         // SAFETY: `pid` is a valid out pointer for a pid_t.
@@ -101,8 +112,11 @@ impl Target {
     /// range, and the same selected text when read again now. Err names the first check that
     /// failed. Element identity alone does not decide: Chromium and Electron (Slack, spike S2)
     /// hand out a new element object for the same field on each query.
+    ///
+    /// The check reads the target app's own focused element, not the system-wide one: Retone's
+    /// popup holds key focus during Replace, so system-wide AX reports Retone as the focused app.
     pub fn still_matches(&self, frontmost_pid: i32, captured_text: &str) -> Result<(), &'static str> {
-        let now = Target::focused().ok_or("no focused element")?;
+        let now = Target::focused_in(self.pid).ok_or("no focused element")?;
         if self.pid != frontmost_pid || now.pid != self.pid {
             return Err("another app is in front");
         }
