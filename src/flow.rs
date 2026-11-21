@@ -188,8 +188,10 @@ impl Flow {
                 Event::Applied { attempt: a, result: Err(error) },
             ) if attempt == a => {
                 // Replace refused or failed: keep the rewrite so Copy still works, but do not
-                // offer Replace again; a second try could insert the text twice.
+                // offer Replace again, not even after Retry or a new style or provider: a second
+                // try could insert the text twice. Only a new capture allows it again.
                 self.apply_error = Some(error);
+                self.can_replace = false;
                 let phase = Phase::Ready(rewrite);
                 (State::Previewing { attempt, original, style, phase, can_replace: false }, Effects::none())
             }

@@ -196,7 +196,9 @@ impl Popup {
     /// Saves the choice for the next rewrites too, then reruns this one, or asks for consent
     /// first when this provider and model do not have it yet.
     pub fn choose(&mut self, index: usize, tx: &mut Tx) {
-        let Some(chosen) = self.picker.take().and_then(|p| p.choices.into_iter().nth(index)) else { return };
+        // A key with no row (a letter, or 9 in a list of 3) keeps the list open.
+        let Some(chosen) = self.picker.as_ref().and_then(|p| p.choices.get(index)).cloned() else { return };
+        self.picker = None;
         if self.provider.as_ref() == Some(&chosen) {
             return;
         }
@@ -205,7 +207,8 @@ impl Popup {
         if let Some(links) = self.links.as_ref() {
             // A failed write keeps the choice for this rewrite; Settings shows the saved one.
             self.config.save(&mut links.shared.prefs()).ok();
-            links.settings.update(|settings, _| settings.reload());
+            let kind = chosen.kind();
+            links.settings.update(move |settings, _| settings.reload_choice(kind));
             consented = consent::has_consent(&links.shared.prefs(), &chosen);
         }
         self.provider = Some(chosen);

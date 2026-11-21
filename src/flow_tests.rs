@@ -197,3 +197,17 @@ fn a_provider_change_with_consent_rewrites_the_same_text_and_style_again() {
     assert!(matches!(&out[..], [Effect::Request { text, style: Style::Concise, .. }] if text == "text"), "{out:?}");
     assert!(matches!(&flow.state, State::Previewing { phase: Phase::Loading, .. }));
 }
+
+#[test]
+fn after_a_failed_replace_no_later_rewrite_offers_replace() {
+    let mut flow = Flow::new(Style::Clear);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Ok("Rewrite".into()) });
+    let Effect::Apply { attempt: apply, .. } = effects(flow.step(Event::Replace))[0].clone() else { panic!() };
+    flow.step(Event::Applied { attempt: apply, result: Err("the selection changed".into()) });
+    for event in [Event::Retry, Event::ChangeStyle(Style::Concise), Event::ProviderChanged { consented: true }] {
+        let Effect::Request { attempt, .. } = effects(flow.step(event))[0].clone() else { panic!() };
+        flow.step(Event::Answer { attempt, result: Ok("Again".into()) });
+        assert!(effects(flow.step(Event::Replace)).is_empty(), "Replace must stay off after a failed apply");
+    }
+}

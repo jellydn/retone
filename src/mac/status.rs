@@ -88,6 +88,8 @@ fn menu_bar_image() -> Option<Retained<NSImage>> {
     // The PNG is 36 px for Retina; 18 pt is the menu-bar icon height.
     image.setSize(NSSize::new(18.0, 18.0));
     image.setTemplate(true);
+    // An image-only item needs a name for VoiceOver; the old "Rt" title gave one.
+    image.setAccessibilityDescription(Some(&NSString::from_str("Retone")));
     Some(image)
 }
 

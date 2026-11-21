@@ -198,13 +198,17 @@ impl SettingsUi {
         self.provider_status = Some(checked);
     }
 
-    /// The popup saved another provider: show the saved choice and its model.
-    pub fn reload(&mut self) {
+    /// The popup saved another provider: show the saved choice and its model. Only that
+    /// provider's model field changes, so unsaved edits in the others stay.
+    pub fn reload_choice(&mut self, kind: Kind) {
         self.config = self.shared.config();
         self.provider_choice = self.config.provider;
-        self.local_model = TextEdit::new(&self.config.local_model);
-        self.pi_model = TextEdit::new(&self.config.pi_model);
-        self.opencode_model = TextEdit::new(&self.config.opencode_model);
+        let (field, model) = match kind {
+            Kind::Local => (&mut self.local_model, &self.config.local_model),
+            Kind::Pi => (&mut self.pi_model, &self.config.pi_model),
+            Kind::OpenCode => (&mut self.opencode_model, &self.config.opencode_model),
+        };
+        *field = TextEdit::new(model);
     }
 
     pub fn list_local_models(&mut self) {
