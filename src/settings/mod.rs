@@ -1,7 +1,8 @@
 //! The Settings window: shortcut, provider, style and theme, privacy, permissions, updates.
 //!
 //! Every change is validated before it is saved: a hotkey only after it registers, a provider
-//! only when its endpoint is loopback and its model ID exact.
+//! only when its endpoint is allowed (this Mac, or a private network after the opt-in) and its
+//! model ID exact.
 
 pub mod view;
 
@@ -53,6 +54,8 @@ pub struct SettingsUi {
     /// Who holds the chord the last conflict refused, when Rune can tell.
     pub conflict_owner: Option<String>,
     pub endpoint: TextEdit,
+    /// The "Allow LAN and Tailscale servers" switch; saved with the rest of the Provider page.
+    pub allow_network: bool,
     pub local_model: TextEdit,
     pub pi_model: TextEdit,
     pub opencode_model: TextEdit,
@@ -86,6 +89,7 @@ impl SettingsUi {
             hotkey_test: HotkeyTest::Idle,
             conflict_owner: None,
             endpoint: TextEdit::new(&config.local_endpoint),
+            allow_network: config.local_allow_network,
             local_model: TextEdit::new(&config.local_model),
             pi_model: TextEdit::new(&config.pi_model),
             opencode_model: TextEdit::new(&config.opencode_model),
@@ -184,6 +188,7 @@ impl SettingsUi {
         let mut next = self.config.clone();
         next.provider = self.provider_choice;
         next.local_endpoint = self.endpoint.text.trim().to_string();
+        next.local_allow_network = self.allow_network;
         next.local_model = self.local_model.text.trim().to_string();
         next.pi_model = self.pi_model.text.trim().to_string();
         next.opencode_model = self.opencode_model.text.trim().to_string();
@@ -212,9 +217,9 @@ impl SettingsUi {
     }
 
     pub fn list_local_models(&mut self) {
-        let endpoint = self.endpoint.text.clone();
+        let request = (self.endpoint.text.clone(), self.allow_network);
         self.listed_models = None;
-        self.models.request(endpoint, |endpoint| local::list_models(&endpoint));
+        self.models.request(request, |(endpoint, allow_network)| local::list_models(&endpoint, allow_network));
     }
 
     pub fn pick_local_model(&mut self, model: &str) {
@@ -275,6 +280,13 @@ pub const SCENES: &[Scene] = &[
         s.local_model = TextEdit::new("qwen2.5:7b");
         s.listed_models = Some(Ok(vec!["qwen2.5:0.5b".into(), "qwen2.5:7b".into()]));
     }),
+    ("provider-local-network", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.allow_network = true;
+        s.endpoint = TextEdit::new("http://box.tailnet.ts.net:11434/v1");
+        s.local_model = TextEdit::new("qwen2.5:7b");
+    }),
     ("provider-opencode", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::OpenCode);
@@ -312,6 +324,11 @@ mod tests {
         ui.save_provider();
         assert!(matches!(ui.provider_status, Some(Err(_))));
         assert_eq!(ui.shared.config().provider, None, "nothing saved");
+
+        ui.allow_network = true;
+        ui.save_provider();
+        assert!(matches!(ui.provider_status, Some(Ok(_))), "the LAN address with the opt-in");
+        assert!(ui.shared.config().local_allow_network, "the opt-in is saved with the page");
 
         ui.endpoint = TextEdit::new(local::OLLAMA);
         ui.save_provider();

@@ -167,11 +167,13 @@ impl Popup {
         }
         let choices = self.offered(&[]);
         let selected = choices.iter().position(|c| Some(c) == self.provider.as_ref()).unwrap_or(0);
-        let listing =
-            self.links.is_some() && crate::provider::local::validate_endpoint(&self.config.local_endpoint).is_ok();
+        let allow_network = self.config.local_allow_network;
+        let listing = self.links.is_some()
+            && provider::local::validate_endpoint(&self.config.local_endpoint, allow_network).is_ok();
         if listing {
-            let endpoint = self.config.local_endpoint.clone();
-            self.local_models.request(endpoint, |endpoint| provider::local::list_models(&endpoint));
+            let request = (self.config.local_endpoint.clone(), allow_network);
+            self.local_models
+                .request(request, |(endpoint, allow_network)| provider::local::list_models(&endpoint, allow_network));
         }
         self.picker = Some(Picker { choices, selected, listing });
     }

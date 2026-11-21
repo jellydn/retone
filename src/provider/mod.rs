@@ -1,4 +1,5 @@
-//! Providers: a local OpenAI-compatible endpoint on loopback, and the Pi and OpenCode CLIs.
+//! Providers: a local OpenAI-compatible endpoint (on this Mac, or on a private network after
+//! the user opts in), and the Pi and OpenCode CLIs.
 //!
 //! A closed list on purpose: Retone never guesses flags, switches tools or falls back to another
 //! provider. Every request is bounded (deadline, answer cap) and its errors are redacted.

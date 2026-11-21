@@ -6,7 +6,9 @@ use crate::styles::PRESETS;
 use crate::theme;
 use crate::updates::UpdateChannel;
 use rune::{Cx, El, ScrollSpec, Shortcut, ShortcutError, Tx, col, row, spacer, text};
-use rune_kit::{Button, ButtonVariant, Kit, SegmentedControl, ShortcutRecorder, TextInput, shortcut_error_message};
+use rune_kit::{
+    Button, ButtonVariant, Kit, SegmentedControl, ShortcutRecorder, Switch, TextInput, shortcut_error_message,
+};
 
 pub fn view(s: &SettingsUi, cx: &mut Cx<SettingsUi>) -> El {
     let k = s.config.theme.kit(cx.system_dark());
@@ -197,6 +199,12 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
                 .build(k),
         ))
         .child(presets)
+        .child(
+            Switch::new(s.allow_network)
+                .label("Allow LAN and Tailscale servers")
+                .on_toggle(|s: &mut SettingsUi| s.allow_network = !s.allow_network)
+                .build(k),
+        )
         .child(labelled(
             k,
             "Model",
@@ -226,7 +234,14 @@ fn local_fields(s: &SettingsUi, k: &Kit, page: El) -> El {
         Some(Err(error)) => page = page.child(status(k, &Err(error.clone()))),
         None => {}
     }
-    page.child(note(k, "Only addresses on this Mac are accepted. Ollama and LM Studio may log requests on their side."))
+    let privacy = if s.allow_network {
+        "Private addresses only, such as 192.168.1.20, 100.101.1.2 or box.tailnet.ts.net. The text goes over \
+         your network: plain http is not encrypted, so use Tailscale or https on a shared network. The server \
+         may log requests on its side."
+    } else {
+        "Only addresses on this Mac are accepted. Ollama and LM Studio may log requests on their side."
+    };
+    page.child(note(k, privacy))
 }
 
 fn style_page(s: &SettingsUi, k: &Kit) -> El {

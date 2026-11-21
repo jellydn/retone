@@ -31,7 +31,7 @@ src/
 ├── apply.rs       # replace checks and paste
 ├── placement.rs   # popup position (caret, then pointer)
 ├── native.rs      # worker thread that owns the pasteboard and the AX element
-├── provider/      # local (loopback HTTP), cli runner, pi, opencode, consent
+├── provider/      # local (HTTP/HTTPS, loopback or private network), cli runner, pi, opencode, consent
 ├── popup/         # popup view and scenes
 ├── settings/      # Settings window
 ├── updates.rs     # update channel: Sparkle, Homebrew, or manual
@@ -44,7 +44,7 @@ src/
 - **Nothing changes on failure or cancel**: replace only after the target check passes; restore the clipboard unless another app changed it.
 - **Input limit**: 2,000 characters.
 - **No default hotkey**.
-- **Local provider is loopback only**. CLI providers get text on stdin, a `0700` temp folder, a version gate, and the file-write guard.
+- **Local provider: loopback, or private addresses after the opt-in** (checked in the resolver at connect time; no proxy, no redirects; consent per host). CLI providers get text on stdin, a `0700` temp folder, a version gate, and the file-write guard.
 - **`unsafe` only in `src/mac/`**, each block with a `// SAFETY:` comment, behind safe functions. No `unsafe impl Send`; use the native worker.
 - **Bundle IDs**: release `io.github.jellydn.retone`, dev `io.github.jellydn.retone.dev`. Do not share prefs or grants between them.
 - **One update owner**: Homebrew installs never start Sparkle; Sparkle starts only with `SUPublicEDKey` in the bundle.

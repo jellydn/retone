@@ -14,7 +14,7 @@ rune-core = { git = "https://github.com/anomalyco/rune", rev = "8283dca577d3cd50
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Plain HTTP only: the local provider accepts loopback endpoints, so TLS is never needed.
-ureq = { version = "3", default-features = false, features = ["json"] }
+ureq = { version = "3", default-features = false, features = ["json", "native-tls-no-default"] }
 
 # Same objc2 family versions as Rune's lockfile.
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -1,22 +1,42 @@
-//! Local AI: an OpenAI-compatible endpoint (Ollama, LM Studio) on this Mac only.
+//! Local AI: an OpenAI-compatible endpoint (Ollama, LM Studio) on this Mac, or, after the user
+//! turns it on, on a private network address (LAN or Tailscale).
 //!
-//! The host must be loopback, so the selected text cannot leave the Mac through this option.
+//! Only loopback and private addresses are accepted. The check runs in the HTTP client's
+//! resolver, on the addresses it then connects to, so a host name cannot resolve to a public
+//! address after the check. No proxy and no redirects, so the text cannot be sent on elsewhere.
 //! No API key field; Retone stores nothing (the server may log on its side).
 
 use super::{DEADLINE, answer_cap};
 use crate::styles::{self, Style};
 use serde_json::{Value, json};
+use std::net::IpAddr;
+use ureq::config::Config;
+use ureq::http::Uri;
+use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
+use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
+use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 pub const OLLAMA: &str = "http://127.0.0.1:11434/v1";
 pub const LM_STUDIO: &str = "http://127.0.0.1:1234/v1";
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
+const NOT_PRIVATE: &str = "Retone accepts only addresses on this Mac or on a private network (LAN or Tailscale), so it did not send the text.";
 
-/// Checks a base URL such as `http://127.0.0.1:11434/v1` and returns it without a trailing `/`.
-pub fn validate_endpoint(url: &str) -> Result<String, String> {
-    let url = url.trim().trim_end_matches('/');
-    let Some(rest) = url.strip_prefix("http://") else {
-        return Err("Use an http:// address on this Mac, such as http://127.0.0.1:11434/v1.".into());
+/// What a host is before any name lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Host {
+    Loopback,
+    Private,
+    Public,
+    /// A host name other than `localhost`: decided when the resolver looks it up.
+    Name,
+}
+
+/// Splits `http(s)://host[:port]/path` and returns the authority and the host (IPv6 without
+/// brackets). Err for anything Retone does not send to.
+fn authority(url: &str) -> Result<(&str, &str), String> {
+    let Some(rest) = url.strip_prefix("http://").or_else(|| url.strip_prefix("https://")) else {
+        return Err("Use an http:// or https:// address, such as http://127.0.0.1:11434/v1.".into());
     };
     let authority = rest.split('/').next().unwrap_or_default();
     // `http://127.0.0.1@example.com` would send the text to example.com.
@@ -35,20 +55,108 @@ pub fn validate_endpoint(url: &str) -> Result<String, String> {
         },
     };
     let port_ok = port.is_none_or(|port| port.parse::<u16>().is_ok());
-    if !matches!(host.to_ascii_lowercase().as_str(), "127.0.0.1" | "::1" | "localhost") || !port_ok {
-        return Err("Retone accepts local addresses only: 127.0.0.1, ::1 or localhost.".into());
+    let name_ok = !host.is_empty()
+        && !host.starts_with(['-', '.'])
+        && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'));
+    if !port_ok || !name_ok {
+        return Err("This address is not valid.".into());
     }
-    Ok(url.to_string())
+    Ok((authority, host))
 }
 
-fn agent() -> ureq::Agent {
-    ureq::Agent::config_builder().timeout_global(Some(DEADLINE)).http_status_as_error(false).build().into()
+fn classify(host: &str) -> Host {
+    if host.eq_ignore_ascii_case("localhost") {
+        return Host::Loopback;
+    }
+    match host.parse::<IpAddr>() {
+        Ok(ip) if ip.to_canonical().is_loopback() => Host::Loopback,
+        Ok(ip) if is_private(ip) => Host::Private,
+        Ok(_) => Host::Public,
+        Err(_) if host.contains(':') => Host::Public,
+        Err(_) => Host::Name,
+    }
+}
+
+/// Private network ranges: RFC 1918, link-local, the CGNAT range Tailscale uses (100.64/10),
+/// and IPv6 unique local (includes Tailscale's fd7a:115c:a1e0::/48) and link-local.
+fn is_private(ip: IpAddr) -> bool {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => {
+            let [a, b, ..] = v4.octets();
+            v4.is_private() || v4.is_link_local() || (a == 100 && (b & 0xc0) == 64)
+        }
+        IpAddr::V6(v6) => v6.is_unique_local() || v6.is_unicast_link_local(),
+    }
+}
+
+/// Whether the resolver may connect to `ip` for an endpoint whose host is loopback (only
+/// loopback then) or not (loopback or private).
+fn allowed(ip: IpAddr, loopback_only: bool) -> bool {
+    let ip = ip.to_canonical();
+    ip.is_loopback() || (!loopback_only && is_private(ip))
+}
+
+/// Checks a base URL such as `http://127.0.0.1:11434/v1` and returns it without a trailing `/`.
+/// Addresses outside this Mac need `allow_network`, the user's opt-in.
+pub fn validate_endpoint(url: &str, allow_network: bool) -> Result<String, String> {
+    let url = url.trim().trim_end_matches('/');
+    let (_, host) = authority(url)?;
+    match classify(host) {
+        Host::Loopback => Ok(url.to_string()),
+        Host::Public => {
+            Err("Retone accepts only addresses on this Mac or on a private network (LAN or Tailscale).".into())
+        }
+        Host::Private | Host::Name if allow_network => Ok(url.to_string()),
+        Host::Private | Host::Name => {
+            Err("Turn on \"Allow LAN and Tailscale servers\" to use an address outside this Mac.".into())
+        }
+    }
+}
+
+/// The `host:port` of an endpoint outside this Mac, for the consent key and question; None for
+/// loopback.
+pub fn network_host(endpoint: &str) -> Option<&str> {
+    let (authority, host) = authority(endpoint).ok()?;
+    (classify(host) != Host::Loopback).then_some(authority)
+}
+
+/// Refuses a lookup unless every address it returns is allowed, so the connection can only go
+/// to an address that passed the check.
+#[derive(Debug)]
+struct PrivateOnly {
+    loopback_only: bool,
+}
+
+impl Resolver for PrivateOnly {
+    fn resolve(&self, uri: &Uri, config: &Config, timeout: NextTimeout) -> Result<ResolvedSocketAddrs, ureq::Error> {
+        let addrs = DefaultResolver::default().resolve(uri, config, timeout)?;
+        if addrs.iter().all(|addr| allowed(addr.ip(), self.loopback_only)) {
+            Ok(addrs)
+        } else {
+            Err(ureq::Error::Other(NOT_PRIVATE.into()))
+        }
+    }
+}
+
+fn agent(endpoint: &str) -> ureq::Agent {
+    let loopback_only = network_host(endpoint).is_none();
+    // The macOS trust store, so a LAN server with a certificate from the user's own CA works.
+    let tls = TlsConfig::builder().provider(TlsProvider::NativeTls).root_certs(RootCerts::PlatformVerifier).build();
+    let config = ureq::Agent::config_builder()
+        .timeout_global(Some(DEADLINE))
+        .http_status_as_error(false)
+        .proxy(None)
+        .max_redirects(0)
+        .tls_config(tls)
+        .build();
+    ureq::Agent::with_parts(config, DefaultConnector::default(), PrivateOnly { loopback_only })
 }
 
 /// Model IDs from `GET /models`, for the exact-ID picker in Settings.
-pub fn list_models(endpoint: &str) -> Result<Vec<String>, String> {
-    let endpoint = validate_endpoint(endpoint)?;
-    let mut response = agent().get(format!("{endpoint}/models")).call().map_err(|e| unreachable_message(&e))?;
+pub fn list_models(endpoint: &str, allow_network: bool) -> Result<Vec<String>, String> {
+    let endpoint = validate_endpoint(endpoint, allow_network)?;
+    let mut response =
+        agent(&endpoint).get(format!("{endpoint}/models")).call().map_err(|e| unreachable_message(&e))?;
     if !response.status().is_success() {
         return Err(format!("The server answered {}.", response.status()));
     }
@@ -58,7 +166,9 @@ pub fn list_models(endpoint: &str) -> Result<Vec<String>, String> {
 }
 
 pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result<String, String> {
-    let endpoint = validate_endpoint(endpoint)?;
+    // The opt-in was checked when the provider was built from the saved settings; this check
+    // still refuses public addresses, and the resolver checks the addresses themselves.
+    let endpoint = validate_endpoint(endpoint, true)?;
     let prompt = styles::build(style, text);
     let body = json!({
         "model": model,
@@ -69,8 +179,10 @@ pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result
             { "role": "user", "content": prompt.user },
         ],
     });
-    let mut response =
-        agent().post(format!("{endpoint}/chat/completions")).send_json(&body).map_err(|e| unreachable_message(&e))?;
+    let mut response = agent(&endpoint)
+        .post(format!("{endpoint}/chat/completions"))
+        .send_json(&body)
+        .map_err(|e| unreachable_message(&e))?;
     let status = response.status();
     let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
     if !status.is_success() {
@@ -90,8 +202,12 @@ pub fn rewrite(endpoint: &str, model: &str, style: &Style, text: &str) -> Result
 fn unreachable_message(error: &ureq::Error) -> String {
     match error {
         ureq::Error::Timeout(_) => format!("No answer within {} s.", DEADLINE.as_secs()),
-        ureq::Error::ConnectionFailed | ureq::Error::Io(_) => {
+        ureq::Error::ConnectionFailed | ureq::Error::Io(_) | ureq::Error::HostNotFound => {
             "Cannot reach the local server. Is Ollama or LM Studio running?".into()
+        }
+        ureq::Error::Other(_) => NOT_PRIVATE.into(),
+        ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => {
+            "The secure connection failed. Check the server's certificate, or use http:// on Tailscale.".into()
         }
         _ => "The request to the local server failed.".into(),
     }
