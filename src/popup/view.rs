@@ -22,22 +22,25 @@ pub fn styles(config: &Config) -> Vec<Style> {
 pub fn spoken(p: &Popup) -> Option<(String, LiveRegion)> {
     use LiveRegion::{Assertive, Polite};
     if let Some(error) = &p.flow.apply_error {
-        return Some((format!("Replace failed: {error}. Use Copy instead."), Assertive));
+        return Some((t!("popup.replace_failed", error = error), Assertive));
     }
     match &p.flow.state {
         State::Idle | State::Capturing { .. } | State::Applying { .. } => None,
         State::Notice(notice) => {
             let (title, body) = notice_text(p, notice);
-            Some((format!("{title}. {body}"), Assertive))
+            Some((t!("popup.spoken.notice", title = title, body = body), Assertive))
         }
         State::AwaitingConsent { .. } => Some((p.provider.as_ref().map(consent::question).unwrap_or_default(), Polite)),
         // The same words while streaming, so each new token is not announced again.
-        State::Previewing { phase: Phase::Loading | Phase::Streaming(_), .. } => Some(("Rewriting.".into(), Polite)),
-        State::Previewing { phase: Phase::Failed(error), .. } => Some((format!("Rewrite failed. {error}"), Assertive)),
+        State::Previewing { phase: Phase::Loading | Phase::Streaming(_), .. } => {
+            Some((t!("popup.spoken.rewriting").into(), Polite))
+        }
+        State::Previewing { phase: Phase::Failed(error), .. } => {
+            Some((t!("popup.spoken.failed", error = error), Assertive))
+        }
         State::Previewing { phase: Phase::Ready(_), can_replace, .. } => {
-            let keys =
-                if *can_replace { "Press Return to replace it, or ⌘C to copy it." } else { "Press ⌘C to copy it." };
-            Some((format!("Rewrite ready. {keys}"), Polite))
+            let words = if *can_replace { t!("popup.spoken.ready_replace") } else { t!("popup.spoken.ready_copy") };
+            Some((words.into(), Polite))
         }
     }
 }
@@ -64,13 +67,13 @@ pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
 
 fn state_body(p: &Popup, k: &Kit, state: &State) -> El {
     match state {
-        State::Idle | State::Capturing { .. } => loading(k, "Reading the selection…"),
+        State::Idle | State::Capturing { .. } => loading(k, t!("popup.reading")),
         State::Notice(notice) => notice_body(p, k, notice),
         State::AwaitingConsent { .. } => consent_body(p, k),
         State::Previewing { original, style, phase, can_replace, .. } => {
             preview_body(p, k, original, style, phase, *can_replace)
         }
-        State::Applying { .. } => loading(k, "Replacing…"),
+        State::Applying { .. } => loading(k, t!("popup.replacing")),
     }
 }
 
@@ -84,7 +87,7 @@ fn header(p: &Popup, k: &Kit) -> El {
         Some(provider) => {
             format!("{} · {}", provider.kind().name(), crate::provider::local::short_model_name(provider.model()))
         }
-        None => "No provider".into(),
+        None => t!("popup.no_provider").into(),
     };
     row()
         .key("header")
@@ -99,28 +102,23 @@ fn header(p: &Popup, k: &Kit) -> El {
                 .shortcut("⌘P")
                 .on_press(|p: &mut Popup| p.toggle_picker())
                 .build(k)
-                .label(format!("Provider: {source}"))
+                .label(t!("popup.provider_label", source = source))
         } else {
             text(source.clone())
                 .font(k.ty.text_xsmall)
                 .color(k.c.text_muted)
                 .max_lines(1)
-                .label(format!("Provider: {source}"))
+                .label(t!("popup.provider_label", source = source))
         })
 }
 
 /// The picker's key hint in words: a screen reader reads ↑↓ and ⏎ as symbol names.
 fn spoken_hint(listing: bool) -> &'static str {
-    if listing {
-        "Loading local models. Arrow keys choose, Return uses, Escape goes back."
-    } else {
-        "Arrow keys choose, Return uses, Escape goes back."
-    }
+    if listing { t!("popup.picker.spoken_hint_loading") } else { t!("popup.picker.spoken_hint") }
 }
 
 fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
-    let mut list =
-        List::new().active(Some(picker.selected)).empty_message("No provider is set up. Open Settings → Provider.");
+    let mut list = List::new().active(Some(picker.selected)).empty_message(t!("popup.picker.empty"));
     for (index, choice) in picker.choices.iter().enumerate() {
         list = list.item(
             ListItem::new(format!("{}  {}", index + 1, crate::provider::local::short_model_name(choice.model())))
@@ -129,11 +127,7 @@ fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
                 .on_select(move |p: &mut Popup, tx: &mut Tx| p.choose(index, tx)),
         );
     }
-    let hint = if picker.listing {
-        "Loading local models…   ↑↓ choose   ⏎ use   Esc back"
-    } else {
-        "↑↓ choose   ⏎ use   Esc back"
-    };
+    let hint = if picker.listing { t!("popup.picker.hint_loading") } else { t!("popup.picker.hint") };
     col()
         .w_full()
         .grow(1.0)
@@ -146,7 +140,7 @@ fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
                 .grow(1.0)
                 .min_h(0.0)
                 .scroll(ScrollSpec { stick_bottom: false })
-                .label("Providers")
+                .label(t!("popup.picker.label"))
                 .child(list.build(k)),
         )
         .child(text(hint).font(k.ty.text_xsmall).color(k.c.text_muted).label(spoken_hint(picker.listing)))
@@ -192,20 +186,20 @@ fn notice_text(p: &Popup, notice: &Notice) -> (String, String) {
     match notice {
         Notice::Refused(refusal) => (refusal.title().to_string(), refusal.message()),
         Notice::NoProvider => {
-            let body = p.provider_problem.clone().unwrap_or_else(|| "Choose a provider in Settings.".into());
-            ("No provider".into(), body)
+            let body = p.provider_problem.clone().unwrap_or_else(|| t!("popup.no_provider_body").into());
+            (t!("popup.no_provider").into(), body)
         }
-        Notice::CaptureFailed(error) => ("Cannot read the selection".into(), error.clone()),
+        Notice::CaptureFailed(error) => (t!("popup.capture_failed").into(), error.clone()),
     }
 }
 
 fn notice_body(p: &Popup, k: &Kit, notice: &Notice) -> El {
     let (title, body) = notice_text(p, notice);
-    let mut actions = vec![action("OK", "⎋", ButtonVariant::Neutral, || Event::Cancel, k)];
+    let mut actions = vec![action(t!("popup.ok"), "⎋", ButtonVariant::Neutral, || Event::Cancel, k)];
     if matches!(notice, Notice::NoProvider) {
         actions.insert(
             0,
-            Button::new("Open Settings")
+            Button::new(t!("popup.open_settings"))
                 .variant(ButtonVariant::Outline)
                 .on_press_tx(|p: &mut Popup, tx: &mut Tx| p.open_settings(tx))
                 .build(k),
@@ -226,17 +220,12 @@ fn consent_body(p: &Popup, k: &Kit) -> El {
         .w_full()
         .grow(1.0)
         .gap(10.0)
-        .child(message(k, "consent", "Allow this provider?", &question, k.c.text_strong))
-        .child(
-            text("Retone asks once per provider and model. Revoke it in Settings → Privacy.")
-                .font(k.ty.text_xsmall)
-                .color(k.c.text_muted)
-                .wrap(),
-        )
+        .child(message(k, "consent", t!("popup.consent.title"), &question, k.c.text_strong))
+        .child(text(t!("popup.consent.note")).font(k.ty.text_xsmall).color(k.c.text_muted).wrap())
         .child(spacer())
         .child(buttons(vec![
-            action("Cancel", "⎋", ButtonVariant::Neutral, || Event::Cancel, k),
-            action("Allow", "↩", ButtonVariant::Contrast, || Event::ConsentGiven, k),
+            action(t!("popup.cancel"), "⎋", ButtonVariant::Neutral, || Event::Cancel, k),
+            action(t!("popup.allow"), "↩", ButtonVariant::Contrast, || Event::ConsentGiven, k),
         ]))
 }
 
@@ -251,35 +240,37 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
     let added: Vec<Span> =
         added.into_iter().map(|r| Span::new(r.start, r.end).bg(k.c.success.bg, 1.0).color(k.c.success.fg)).collect();
     let (result, ready) = match phase {
-        Phase::Loading => (loading(k, "Rewriting…"), false),
-        Phase::Streaming(so_far) => (scrolling(k, "rewrite", so_far, Vec::new(), true).label("Rewrite so far"), false),
-        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added, false).label("Rewrite"), true),
-        Phase::Failed(error) => (message(k, "error", "Rewrite failed", error, k.c.danger.fg), false),
+        Phase::Loading => (loading(k, t!("popup.rewriting")), false),
+        Phase::Streaming(so_far) => {
+            (scrolling(k, "rewrite", so_far, Vec::new(), true).label(t!("popup.rewrite_so_far")), false)
+        }
+        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added, false).label(t!("popup.rewrite")), true),
+        Phase::Failed(error) => (message(k, "error", t!("popup.rewrite_failed"), error, k.c.danger.fg), false),
     };
     let mut notes = Vec::new();
     if let Some(error) = &p.flow.apply_error {
-        notes.push(format!("Replace failed: {error}. Use Copy instead."));
+        notes.push(t!("popup.replace_failed", error = error));
     } else if ready && !can_replace {
         notes.push(if p.clipboard_only {
-            "Accessibility is off, so Retone used the clipboard, not the selection. Grant it in Settings.".to_string()
+            t!("popup.note.clipboard_only").to_string()
         } else if p.from_clipboard {
-            "Nothing was selected, so Retone used the clipboard text. Only Copy is offered.".to_string()
+            t!("popup.note.from_clipboard").to_string()
         } else {
-            "Retone cannot replace text in this app or field, so only Copy is offered.".to_string()
+            t!("popup.note.copy_only").to_string()
         });
     }
     if matches!(phase, Phase::Streaming(_)) {
-        notes.push("Still writing… Copy and Replace turn on when the answer is complete.".to_string());
+        notes.push(t!("popup.note.streaming").to_string());
     }
     if let Some(warning) = &p.adapter_warning {
         notes.push(warning.clone());
     }
-    let mut actions = vec![action("Retry", "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
+    let mut actions = vec![action(t!("popup.retry"), "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
     if ready {
-        actions.push(action("Copy", "⌘C", ButtonVariant::Neutral, || Event::Copy, k));
+        actions.push(action(t!("popup.copy"), "⌘C", ButtonVariant::Neutral, || Event::Copy, k));
     }
     if ready && can_replace && p.flow.apply_error.is_none() {
-        actions.push(action("Replace", "↩", ButtonVariant::Contrast, || Event::Replace, k));
+        actions.push(action(t!("popup.replace"), "↩", ButtonVariant::Contrast, || Event::Replace, k));
     }
     let mut body = col()
         .w_full()
@@ -294,7 +285,7 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
                 .color(k.c.text_muted)
                 .max_lines(2)
                 .spans(removed)
-                .label(format!("Original: {original}")),
+                .label(t!("popup.original_label", original = original)),
         )
         .child(el().w_full().h(1.0).fill(k.c.border_weak))
         .child(result);
@@ -316,7 +307,7 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) ->
 }
 
 fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
-    let mut picker = row().key("styles").w_full().gap(4.0).label("Style");
+    let mut picker = row().key("styles").w_full().gap(4.0).label(t!("popup.style_picker"));
     for (index, style) in styles(&p.config).into_iter().enumerate() {
         let on = style.name() == current.name();
         let label = format!("{} {}", index + 1, style.name());
@@ -327,7 +318,7 @@ fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
                 .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(Event::ChangeStyle(chosen.clone()), tx))
                 .build(k)
                 // The digit in the visible label is the key; read the name, state and key apart.
-                .label(format!("{} style", style.name()))
+                .label(t!("popup.style_label", name = style.name()))
                 .checked(on)
                 .shortcut_hint((index + 1).to_string()),
         );

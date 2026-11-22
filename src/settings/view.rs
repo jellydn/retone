@@ -6,6 +6,7 @@
 use super::icons::*;
 use super::rows::{card, help, page_title, setting, value_link};
 use super::{HotkeyTest, PAGES, Page, SettingsUi, SubPage};
+use crate::i18n::I18N;
 use crate::provider::{Kind, local, opencode, pi};
 use crate::styles::PRESETS;
 use crate::theme;
@@ -69,10 +70,11 @@ fn brand(k: &Kit) -> El {
 }
 
 fn sidebar(s: &SettingsUi, k: &Kit) -> El {
-    let mut bar = Sidebar::new().label("Settings").row_gap(4.0).header(brand(k)).header_padding(0.0, 12.0);
+    let mut bar =
+        Sidebar::new().label(t!("settings.sidebar_label")).row_gap(4.0).header(brand(k)).header_padding(0.0, 12.0);
     for (page, label) in PAGES {
         bar = bar.child(
-            SidebarRow::new(label)
+            SidebarRow::new(I18N.text(label))
                 .icon(page_icon(page))
                 .selected(s.page == page)
                 .on_select(move |s: &mut SettingsUi, _: &mut Tx| s.select_page(page))
@@ -117,9 +119,14 @@ fn footer(s: &SettingsUi, k: &Kit) -> El {
         }
         line
     };
-    let whats_new =
-        link("whats-new", Some(&BOOK), "What's new".into(), k.c.text_muted, Some(format!("{RELEASES}/tag/v{version}")));
-    let version_line = link("version", None, format!("Version {version}"), k.c.text_faint, None);
+    let whats_new = link(
+        "whats-new",
+        Some(&BOOK),
+        t!("settings.footer.whats_new").into(),
+        k.c.text_muted,
+        Some(format!("{RELEASES}/tag/v{version}")),
+    );
+    let version_line = link("version", None, t!("settings.footer.version", version = version), k.c.text_faint, None);
     let updates = match s.update_channel {
         UpdateChannel::Sparkle => row()
             .key("check-updates")
@@ -135,10 +142,10 @@ fn footer(s: &SettingsUi, k: &Kit) -> El {
                 #[cfg(target_os = "macos")]
                 crate::mac::updater::check_now();
             })
-            .child(text("Check for updates").font(k.ty.text_small).color(k.c.text_muted)),
-        UpdateChannel::Homebrew => link("updates", None, "Updated by Homebrew".into(), k.c.text_faint, None),
+            .child(text(t!("settings.footer.check_updates")).font(k.ty.text_small).color(k.c.text_muted)),
+        UpdateChannel::Homebrew => link("updates", None, t!("settings.footer.homebrew").into(), k.c.text_faint, None),
         UpdateChannel::Manual => {
-            link("updates", None, "Download updates on GitHub".into(), k.c.text_muted, Some(RELEASES.into()))
+            link("updates", None, t!("settings.footer.github").into(), k.c.text_muted, Some(RELEASES.into()))
         }
     };
     col().key("footer").w_full().gap(2.0).child(whats_new).child(version_line).child(updates)
@@ -179,7 +186,7 @@ fn advanced(s: &SettingsUi, k: &Kit, rows: Vec<El>) -> El {
         .key("advanced-toggle")
         .self_start()
         .role("button")
-        .label("Advanced")
+        .label(t!("settings.advanced"))
         .expanded(open)
         .focusable(true)
         .focus_ring(2.0, 0.0, k.c.border_focus)
@@ -192,7 +199,7 @@ fn advanced(s: &SettingsUi, k: &Kit, rows: Vec<El>) -> El {
         .hover(k.c.hover)
         .press(k.c.pressed)
         .on_press(|s: &mut SettingsUi| s.advanced_open = !s.advanced_open)
-        .child(text("Advanced").font(k.ty.ui_medium).color(k.c.text_muted).a11y_hidden())
+        .child(text(t!("settings.advanced")).font(k.ty.ui_medium).color(k.c.text_muted).a11y_hidden())
         .child(
             icon(if open { &glyphs::TRIANGLE_DOWN } else { &glyphs::TRIANGLE_RIGHT }, 14.0)
                 .color(k.c.icon_muted)
@@ -230,7 +237,14 @@ pub fn style_names() -> Vec<&'static str> {
 fn default_style_row(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let current = Some(s.config.default_style.min(PRESETS.len()));
     let control = dropdown(s, k, layer, "default-style", &style_names(), current, |s, i| s.set_default_style(i));
-    setting(k, "default-style", &glyphs::SPARKLE, "Default style", help(k, "The style the popup starts with."), control)
+    setting(
+        k,
+        "default-style",
+        &glyphs::SPARKLE,
+        t!("settings.default_style"),
+        help(k, t!("settings.default_style_help")),
+        control,
+    )
 }
 
 /// The error under a recorder: who holds a conflicting chord, or why Retone refused it.
@@ -238,9 +252,9 @@ fn recorder_message(s: &SettingsUi) -> impl Fn(&ShortcutError, Option<&Shortcut>
     let owner = s.conflict_owner.clone();
     move |error: &ShortcutError, chord: Option<&Shortcut>| match (error, chord, &owner) {
         (ShortcutError::Conflict, Some(chord), Some(owner)) => {
-            format!("{} is used by {owner}.", chord.keycaps().join(" "))
+            t!("settings.shortcut.used_by", keys = chord.keycaps().join(" "), owner = owner)
         }
-        (ShortcutError::Conflict, _, None) => "Another app holds this shortcut.".into(),
+        (ShortcutError::Conflict, _, None) => t!("settings.shortcut.conflict").into(),
         (ShortcutError::InvalidAccelerator(reason), _, _) => reason.clone(),
         _ => shortcut_error_message(error, chord),
     }
@@ -248,22 +262,22 @@ fn recorder_message(s: &SettingsUi) -> impl Fn(&ShortcutError, Option<&Shortcut>
 
 fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let recorder = ShortcutRecorder::new("shortcut", &s.recorder, |s: &mut SettingsUi| &mut s.recorder)
-        .label("Rewrite selection")
+        .label(t!("settings.shortcut.main_name"))
         .width(200.0)
         .on_change(|s: &mut SettingsUi, next, _: &mut Tx| s.change_hotkey(next))
         .error_message(recorder_message(s))
         .build(k);
     let shortcut_help = if s.recorder.shortcut().is_none() {
-        "Record one to start. Until then, use Rewrite Selection in the menu bar."
+        t!("settings.shortcut.help_unset")
     } else {
-        "Works in every app and replaces that app's own use of it."
+        t!("settings.shortcut.help_set")
     };
     let test_help = match s.hotkey_test {
-        HotkeyTest::Idle => help(k, "Check that the shortcut reaches Retone."),
-        HotkeyTest::Waiting => help(k, "Press your shortcut now."),
-        HotkeyTest::Passed => Some(("It works.".into(), k.c.success.fg)),
+        HotkeyTest::Idle => help(k, t!("settings.test.idle")),
+        HotkeyTest::Waiting => help(k, t!("settings.test.waiting")),
+        HotkeyTest::Passed => Some((t!("settings.test.passed").into(), k.c.success.fg)),
     };
-    let test = Button::new("Test")
+    let test = Button::new(t!("settings.test.button"))
         .variant(ButtonVariant::Outline)
         .disabled(s.recorder.shortcut().is_none())
         .on_press(|s: &mut SettingsUi| s.start_hotkey_test())
@@ -278,13 +292,13 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let granted = false;
     let (access_help, access_control) = if granted {
         (
-            help(k, "On: Retone reads the selection and can replace it."),
-            text("On").font(k.ty.ui_medium).color(k.c.success.fg),
+            help(k, t!("settings.access.on_help")),
+            text(t!("settings.access.on")).font(k.ty.ui_medium).color(k.c.success.fg),
         )
     } else {
         (
-            Some(("Off: clipboard-only mode. Copy the text with ⌘C, then press your shortcut.".into(), k.c.warning.fg)),
-            Button::new("Open Settings")
+            Some((t!("settings.access.off_help").into(), k.c.warning.fg)),
+            Button::new(t!("settings.access.open_settings"))
                 .variant(ButtonVariant::Outline)
                 .on_press(|_: &mut SettingsUi| {
                     // The requests add Retone to the Accessibility list (with the system prompt
@@ -301,44 +315,51 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     };
     let login_help = match &s.login_error {
         Some(error) => Some((error.clone(), k.c.danger.fg)),
-        None => help(k, "Open Retone when you log in to this Mac."),
+        None => help(k, t!("settings.login_help")),
     };
     let login = row_switch(k, s.launch_at_login, |s: &mut SettingsUi| s.set_launch_at_login(!s.launch_at_login));
     col()
         .w_full()
         .gap(16.0)
-        .child(page_title(k, "General"))
+        .child(page_title(k, t!("settings.page.general")))
         .child(card(
             k,
             "general-card",
             vec![
-                setting(k, "shortcut", &glyphs::KEYBOARD, "Rewrite shortcut", help(k, shortcut_help), recorder),
-                setting(k, "test", &PLAY, "Test the shortcut", test_help, test),
+                setting(
+                    k,
+                    "shortcut",
+                    &glyphs::KEYBOARD,
+                    t!("settings.shortcut.title"),
+                    help(k, shortcut_help),
+                    recorder,
+                ),
+                setting(k, "test", &PLAY, t!("settings.test.title"), test_help, test),
                 default_style_row(s, k, layer),
-                setting(k, "theme", &THEME, "Theme", None, theme_picker),
-                setting(k, "accessibility", &ACCESSIBILITY, "Accessibility", access_help, access_control),
-                setting(k, "login", &POWER, "Launch at login", login_help, login),
+                setting(k, "theme", &THEME, t!("settings.theme"), None, theme_picker),
+                setting(k, "accessibility", &ACCESSIBILITY, t!("settings.access.title"), access_help, access_control),
+                setting(k, "login", &POWER, t!("settings.login"), login_help, login),
             ],
         ))
         .child(advanced(
             s,
             k,
             vec![
-                setting(k, "updates", &BOOK, "Updates", help(k, s.update_channel.summary()), el()),
+                setting(k, "updates", &BOOK, t!("settings.updates"), help(k, s.update_channel.summary()), el()),
                 setting(
                     k,
                     "after-update",
                     &RESET,
-                    "Access lost after an update",
-                    help(k, "Turn Retone off and on in the Accessibility list, or remove it and add it again."),
+                    t!("settings.after_update"),
+                    help(k, t!("settings.after_update_help")),
                     el(),
                 ),
                 setting(
                     k,
                     "diagnostics",
                     &NOTE,
-                    "Diagnostics",
-                    help(k, "Start Retone with RETONE_SPIKE_LOG=1 to print capture and replace steps. It never prints text."),
+                    t!("settings.diagnostics"),
+                    help(k, t!("settings.diagnostics_help")),
                     el(),
                 ),
             ],
@@ -351,11 +372,16 @@ fn model_field(
     placeholder: &str,
     field: fn(&mut SettingsUi) -> &mut rune::TextEdit,
 ) -> El {
-    TextInput::new(edit).label("Model").placeholder(placeholder).width(Some(180.0)).on_edit(field).build(k)
+    TextInput::new(edit)
+        .label(t!("settings.provider.model"))
+        .placeholder(placeholder)
+        .width(Some(180.0))
+        .on_edit(field)
+        .build(k)
 }
 
 fn pi_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
-    let note = format!("Runs pi -p --no-session with tools off. Verified: {}.", pi::VERIFIED.join(", "));
+    let note = t!("settings.provider.pi_note", verified = pi::VERIFIED.join(", "));
     setting(
         k,
         key,
@@ -367,11 +393,7 @@ fn pi_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
 }
 
 fn opencode_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
-    let note = format!(
-        "Runs opencode run with its database in memory and tools off. Free models can have other privacy \
-         terms. Verified: {}.",
-        opencode::VERIFIED.join(", ")
-    );
+    let note = t!("settings.provider.opencode_note", verified = opencode::VERIFIED.join(", "));
     let field = model_field(k, &s.opencode_model, "opencode/beam-free", |s| &mut s.opencode_model);
     setting(k, key, &TERMINAL, title, help(k, note), field)
 }
@@ -379,30 +401,39 @@ fn opencode_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
 fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let choices = [None, Some(Kind::Local), Some(Kind::Pi), Some(Kind::OpenCode)];
     let current = choices.iter().position(|c| *c == s.provider_choice);
-    let picker = dropdown(s, k, layer, "provider", &["None", "Local AI", "Pi", "OpenCode"], current, move |s, i| {
-        s.choose_provider(choices[i])
-    });
+    let picker = dropdown(
+        s,
+        k,
+        layer,
+        "provider",
+        &[t!("settings.provider.none"), "Local AI", "Pi", "OpenCode"],
+        current,
+        move |s, i| s.choose_provider(choices[i]),
+    );
     let provider_help = match s.provider_choice {
-        None => "Retone sends nothing until you choose a provider.",
-        Some(Kind::Local) => "An OpenAI-compatible server: Ollama, LM Studio or llama.cpp.",
-        Some(Kind::Pi) | Some(Kind::OpenCode) => "A command-line agent, run with no history in a private temp folder.",
+        None => t!("settings.provider.help_none"),
+        Some(Kind::Local) => t!("settings.provider.help_local"),
+        Some(Kind::Pi) | Some(Kind::OpenCode) => t!("settings.provider.help_cli"),
     };
-    let mut rows = vec![setting(k, "provider", &PROVIDER, "Provider", help(k, provider_help), picker)];
+    let mut rows =
+        vec![setting(k, "provider", &PROVIDER, t!("settings.page.provider"), help(k, provider_help), picker)];
     match s.provider_choice {
         None => {}
         Some(Kind::Local) => rows.extend(local_rows(s, k)),
-        Some(Kind::Pi) => rows.push(pi_row(s, k, "pi-model", "Model")),
-        Some(Kind::OpenCode) => rows.push(opencode_row(s, k, "opencode-model", "Model")),
+        Some(Kind::Pi) => rows.push(pi_row(s, k, "pi-model", t!("settings.provider.model"))),
+        Some(Kind::OpenCode) => rows.push(opencode_row(s, k, "opencode-model", t!("settings.provider.model"))),
     }
     let mut extra = Vec::new();
     if s.provider_choice != Some(Kind::Pi) {
-        extra.push(pi_row(s, k, "pi-model", "Pi model"));
+        extra.push(pi_row(s, k, "pi-model", t!("settings.provider.pi_model")));
     }
     if s.provider_choice != Some(Kind::OpenCode) {
-        extra.push(opencode_row(s, k, "opencode-model", "OpenCode model"));
+        extra.push(opencode_row(s, k, "opencode-model", t!("settings.provider.opencode_model")));
     }
-    let save =
-        Button::new("Save").variant(ButtonVariant::Contrast).on_press(|s: &mut SettingsUi| s.save_provider()).build(k);
+    let save = Button::new(t!("settings.save"))
+        .variant(ButtonVariant::Contrast)
+        .on_press(|s: &mut SettingsUi| s.save_provider())
+        .build(k);
     // The status takes the space left of Save, so a long one wraps there.
     let status = match &s.provider_status {
         Some(result) => col().grow(1.0).shrink().min_w(0.0).child(status_line(k, result)),
@@ -412,7 +443,7 @@ fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     col()
         .w_full()
         .gap(16.0)
-        .child(page_title(k, "Provider"))
+        .child(page_title(k, t!("settings.page.provider")))
         .child(card(k, "provider-card", rows))
         .child(actions.child(save))
         .child(advanced(s, k, extra))
@@ -422,18 +453,13 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
     let address = value_link(k, "address-link", s.endpoint.text.trim(), |s: &mut SettingsUi| {
         s.sub_page = Some(SubPage::Address);
     });
-    let network_help = if s.allow_network {
-        "Private addresses such as 192.168.1.20 or box.tailnet.ts.net. Plain http is not encrypted: use \
-         Tailscale or https on a shared network."
-    } else {
-        "Off: only addresses on this Mac."
-    };
+    let network_help = if s.allow_network { t!("settings.network.on_help") } else { t!("settings.network.off_help") };
     let network = row_switch(k, s.allow_network, |s: &mut SettingsUi| s.allow_network = !s.allow_network);
-    let key_placeholder = if s.api_key_saved { "Saved in the Keychain" } else { "Optional" };
+    let key_placeholder = if s.api_key_saved { t!("settings.api_key.saved") } else { t!("settings.api_key.optional") };
     let mut key_control = row().gap(6.0).center_y().child(
         TextInput::new(&s.api_key)
             .secure()
-            .label("API key")
+            .label(t!("settings.api_key.title"))
             .placeholder(key_placeholder)
             .width(Some(200.0))
             .on_edit(|s: &mut SettingsUi| &mut s.api_key)
@@ -441,7 +467,7 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
     );
     if s.api_key_saved {
         key_control = key_control.child(
-            Button::new("Remove")
+            Button::new(t!("settings.api_key.remove"))
                 .variant(ButtonVariant::Ghost)
                 .on_press(|s: &mut SettingsUi| s.remove_api_key())
                 .build(k),
@@ -449,28 +475,21 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
     }
     let model_control =
         row().gap(6.0).center_y().child(model_field(k, &s.local_model, "qwen2.5:7b", |s| &mut s.local_model)).child(
-            Button::new("List")
+            Button::new(t!("settings.provider.list"))
                 .variant(ButtonVariant::Outline)
                 .on_press(|s: &mut SettingsUi| s.list_local_models())
                 .build(k),
         );
     let mut rows = vec![
-        setting(k, "address", &GLOBE, "Address", None, address),
-        setting(k, "network", &NETWORK, "Allow LAN and Tailscale servers", help(k, network_help), network),
-        setting(
-            k,
-            "api-key",
-            &KEY,
-            "API key",
-            help(k, "For llama-server --api-key. Kept in the Keychain, never shown again."),
-            key_control,
-        ),
+        setting(k, "address", &GLOBE, t!("settings.address.title"), None, address),
+        setting(k, "network", &NETWORK, t!("settings.network.title"), help(k, network_help), network),
+        setting(k, "api-key", &KEY, t!("settings.api_key.title"), help(k, t!("settings.api_key.help")), key_control),
         setting(
             k,
             "model",
             &MODEL,
-            "Model",
-            help(k, "Use 3B or larger, such as qwen2.5:3b: smaller models often ignore the style."),
+            t!("settings.provider.model"),
+            help(k, t!("settings.provider.model_help")),
             model_control,
         ),
     ];
@@ -479,8 +498,8 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
             k,
             "models",
             &LAYERS,
-            "Server models",
-            help(k, "The server has no models. Pull one first."),
+            t!("settings.models.title"),
+            help(k, t!("settings.models.empty")),
             el(),
         )),
         Some(Ok(models)) => {
@@ -494,11 +513,23 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
                         .build(k),
                 );
             }
-            rows.push(setting(k, "models", &LAYERS, "Server models", help(k, "Click one to use it."), list));
+            rows.push(setting(
+                k,
+                "models",
+                &LAYERS,
+                t!("settings.models.title"),
+                help(k, t!("settings.models.pick")),
+                list,
+            ));
         }
-        Some(Err(error)) => {
-            rows.push(setting(k, "models", &LAYERS, "Server models", Some((error.clone(), k.c.danger.fg)), el()))
-        }
+        Some(Err(error)) => rows.push(setting(
+            k,
+            "models",
+            &LAYERS,
+            t!("settings.models.title"),
+            Some((error.clone(), k.c.danger.fg)),
+            el(),
+        )),
         None => {}
     }
     rows
@@ -514,7 +545,7 @@ fn sub_page_header(k: &Kit, back: &str, title: &str) -> El {
                 .key("back")
                 .self_start()
                 .role("button")
-                .label(format!("Back to {back}"))
+                .label(t!("settings.back_to", page = back))
                 .focusable(true)
                 .h(24.0)
                 .pr(6.0)
@@ -532,7 +563,7 @@ fn sub_page_header(k: &Kit, back: &str, title: &str) -> El {
 
 fn address_page(s: &SettingsUi, k: &Kit) -> El {
     let field = TextInput::new(&s.endpoint)
-        .label("Address")
+        .label(t!("settings.address.title"))
         .placeholder(local::OLLAMA)
         .width(Some(260.0))
         .on_edit(|s: &mut SettingsUi| &mut s.endpoint)
@@ -548,36 +579,40 @@ fn address_page(s: &SettingsUi, k: &Kit) -> El {
         .child(preset("Ollama", local::OLLAMA))
         .child(preset("LM Studio", local::LM_STUDIO))
         .child(preset("llama.cpp", local::LLAMA_CPP));
-    let address_help = if s.allow_network {
-        "This Mac, or a private address on your LAN or Tailscale. http or https."
-    } else {
-        "This Mac only. For LAN or Tailscale, turn on the switch on the Provider page."
-    };
+    let address_help =
+        if s.allow_network { t!("settings.address.help_network") } else { t!("settings.address.help_local") };
     col()
         .w_full()
         .gap(16.0)
-        .child(sub_page_header(k, "Provider", "Address"))
+        .child(sub_page_header(k, t!("settings.page.provider"), t!("settings.address.title")))
         .child(card(
             k,
             "address-card",
             vec![
-                setting(k, "address", &GLOBE, "Server address", help(k, address_help), field),
-                setting(k, "presets", &PROVIDER, "Presets", help(k, "Default ports: 11434, 1234 and 8080."), presets),
+                setting(k, "address", &GLOBE, t!("settings.address.server"), help(k, address_help), field),
+                setting(
+                    k,
+                    "presets",
+                    &PROVIDER,
+                    t!("settings.address.presets"),
+                    help(k, t!("settings.address.presets_help")),
+                    presets,
+                ),
             ],
         ))
-        .child(text("Click Save on the Provider page to keep the change.").font(k.ty.text_small).color(k.c.text_muted))
+        .child(text(t!("settings.address.save_note")).font(k.ty.text_small).color(k.c.text_muted))
 }
 
 fn styles_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let custom = s.config.custom_style.trim();
-    let custom_value = if custom.is_empty() { "Not set" } else { custom };
+    let custom_value = if custom.is_empty() { t!("settings.styles.not_set") } else { custom };
     let custom_link = value_link(k, "custom-link", custom_value, |s: &mut SettingsUi| {
         s.sub_page = Some(SubPage::CustomStyle);
     });
     col()
         .w_full()
         .gap(16.0)
-        .child(page_title(k, "Styles"))
+        .child(page_title(k, t!("settings.page.styles")))
         .child(card(
             k,
             "styles-card",
@@ -587,16 +622,16 @@ fn styles_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
                     k,
                     "custom",
                     &STYLES,
-                    "Custom style",
-                    help(k, "Your own instruction, as one more style."),
+                    t!("settings.styles.custom"),
+                    help(k, t!("settings.styles.custom_help")),
                     custom_link,
                 ),
                 setting(
                     k,
                     "built-in",
                     &LAYERS,
-                    "Built-in styles",
-                    help(k, "Clear, Concise, Professional and Technical, each with its own rules and example."),
+                    t!("settings.styles.built_in"),
+                    help(k, t!("settings.styles.built_in_help")),
                     el(),
                 ),
             ],
@@ -618,13 +653,14 @@ fn style_shortcut_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
                 &s.style_recorders[index],
                 move |s: &mut SettingsUi| &mut s.style_recorders[index],
             )
-            .label(format!("Rewrite in the {name} style"))
+            .label(t!("settings.styles.shortcut_label", name = name))
             .width(200.0)
             .disabled(disabled)
             .on_change(move |s: &mut SettingsUi, next, _: &mut Tx| s.change_style_hotkey(index, next))
             .error_message(recorder_message(s))
             .build(k);
-            let note = if disabled { "Set the custom style first." } else { "Opens the popup in this style." };
+            let note =
+                if disabled { t!("settings.styles.shortcut_disabled") } else { t!("settings.styles.shortcut_help") };
             setting(k, &format!("style-shortcut-row-{index}"), &glyphs::KEYBOARD, name, help(k, note), recorder)
         })
         .collect()
@@ -632,8 +668,8 @@ fn style_shortcut_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
 
 fn custom_style_page(s: &SettingsUi, k: &Kit) -> El {
     let field = TextInput::new(&s.custom_style)
-        .label("Custom style")
-        .placeholder("Make it friendly and short.")
+        .label(t!("settings.styles.custom"))
+        .placeholder(t!("settings.styles.custom_placeholder"))
         .width(Some(320.0))
         .on_edit(|s: &mut SettingsUi| &mut s.custom_style)
         .on_submit(|s: &mut SettingsUi, _: &mut Tx| s.save_custom_style())
@@ -641,7 +677,7 @@ fn custom_style_page(s: &SettingsUi, k: &Kit) -> El {
     col()
         .w_full()
         .gap(16.0)
-        .child(sub_page_header(k, "Styles", "Custom style"))
+        .child(sub_page_header(k, t!("settings.page.styles"), t!("settings.styles.custom")))
         .child(card(
             k,
             "custom-card",
@@ -649,14 +685,14 @@ fn custom_style_page(s: &SettingsUi, k: &Kit) -> El {
                 k,
                 "custom",
                 &STYLES,
-                "Instruction",
-                help(k, "Say what to change, such as tone or length. Retone keeps the meaning and the language."),
+                t!("settings.styles.instruction"),
+                help(k, t!("settings.styles.instruction_help")),
                 field,
             )],
         ))
         .child(
             row().w_full().child(spacer()).child(
-                Button::new("Save")
+                Button::new(t!("settings.save"))
                     .variant(ButtonVariant::Contrast)
                     .on_press(|s: &mut SettingsUi| s.save_custom_style())
                     .build(k),
@@ -665,9 +701,8 @@ fn custom_style_page(s: &SettingsUi, k: &Kit) -> El {
 }
 
 fn privacy_page(s: &SettingsUi, k: &Kit) -> El {
-    let consent_help =
-        s.privacy_status.clone().unwrap_or_else(|| "Retone asks before it first sends text to each provider.".into());
-    let revoke = Button::new("Revoke all")
+    let consent_help = s.privacy_status.clone().unwrap_or_else(|| t!("settings.privacy.consent_help").into());
+    let revoke = Button::new(t!("settings.privacy.revoke_all"))
         .variant(ButtonVariant::Outline)
         .on_press(|s: &mut SettingsUi| s.revoke_consent())
         .build(k);
@@ -676,15 +711,15 @@ fn privacy_page(s: &SettingsUi, k: &Kit) -> El {
             k,
             "history",
             &glyphs::EYE_OFF,
-            "No writing history",
-            help(k, "Selected and rewritten text stays in memory and is never saved."),
+            t!("settings.privacy.history"),
+            help(k, t!("settings.privacy.history_help")),
             el(),
         ),
-        setting(k, "consent", &RESET, "Provider consent", help(k, consent_help), revoke),
+        setting(k, "consent", &RESET, t!("settings.privacy.consent"), help(k, consent_help), revoke),
     ];
     for (kind, reason) in &s.disabled {
         let kind = *kind;
-        let turn_on = Button::new("Turn on again")
+        let turn_on = Button::new(t!("settings.privacy.turn_on"))
             .variant(ButtonVariant::Warning)
             .on_press(move |s: &mut SettingsUi| s.enable_adapter(kind))
             .build(k);
@@ -692,10 +727,10 @@ fn privacy_page(s: &SettingsUi, k: &Kit) -> El {
             k,
             &format!("disabled-{}", kind.name()),
             &WARNING,
-            &format!("{} is off", kind.name()),
+            &t!("settings.privacy.adapter_off", provider = kind.name()),
             Some((reason.clone(), k.c.warning.fg)),
             turn_on,
         ));
     }
-    col().w_full().gap(16.0).child(page_title(k, "Privacy")).child(card(k, "privacy-card", rows))
+    col().w_full().gap(16.0).child(page_title(k, t!("settings.page.privacy"))).child(card(k, "privacy-card", rows))
 }

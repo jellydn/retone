@@ -1,0 +1,4 @@
+{
+  "layers": ["app"],
+  "locales": [{ "id": "en", "tag": "en", "label": "English" }]
+}

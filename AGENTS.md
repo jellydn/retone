@@ -39,6 +39,7 @@ src/
 ├── popup/         # popup view and scenes
 ├── settings/      # Settings window
 ├── updates.rs     # update channel: Sparkle, Homebrew, or manual
+├── i18n.rs        # t!() and key!(): UI text from locales/app/en.json, checked at build time
 └── mac/           # the only modules with `unsafe` (AX, events, pasteboard, status item, Sparkle)
 ```
 
@@ -58,6 +59,7 @@ src/
 - Clear names; comments explain why, not what.
 - Keep pure logic (flow, placement, input, config) free of AppKit, and test it there.
 - Use Rune's conventions and kit components before custom widgets.
+- UI text goes in `locales/app/en.json` and is read with `t!("key")`, not written as a literal in view code. Model prompts stay in English.
 
 ## Commit Style
 
