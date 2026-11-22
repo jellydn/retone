@@ -71,7 +71,10 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
             copied?
         }
     };
-    let (text, from_clipboard) = selection_or_clipboard(selection, || board.text());
+    // A selected range that Retone could not read (AX failed, ⌘C too slow) is still a selection:
+    // falling back to the clipboard there would rewrite unrelated text.
+    let range_selected = target.as_ref().and_then(|t| t.range).is_some_and(|range| range.length > 0);
+    let (text, from_clipboard) = selection_or_clipboard(selection, range_selected, || board.text())?;
     if from_clipboard {
         spike!("capture path=clipboard-no-selection chars={}", text.chars().count());
     }
@@ -81,12 +84,20 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
 }
 
 /// The selection when there is one; otherwise the clipboard, read only then. True when the text
-/// came from the clipboard.
-fn selection_or_clipboard(selection: String, clipboard: impl FnOnce() -> Option<String>) -> (String, bool) {
+/// came from the clipboard. An error when the app reports a selected range but its text could
+/// not be read.
+fn selection_or_clipboard(
+    selection: String,
+    range_selected: bool,
+    clipboard: impl FnOnce() -> Option<String>,
+) -> Result<(String, bool), String> {
     if !selection.trim().is_empty() {
-        return (selection, false);
+        return Ok((selection, false));
     }
-    (clipboard().unwrap_or_default(), true)
+    if range_selected {
+        return Err("Retone could not read the selected text. Try again, or copy it with ⌘C first.".into());
+    }
+    Ok((clipboard().unwrap_or_default(), true))
 }
 
 /// Posts ⌘C to the target and reads the result, restoring the user's clipboard afterwards.
@@ -125,18 +136,27 @@ fn copy_selection(board: &Board, pid: i32) -> Result<String, String> {
 mod tests {
     use super::selection_or_clipboard;
 
+    fn no_read() -> Option<String> {
+        panic!("the clipboard must not be read")
+    }
+
     #[test]
     fn a_selection_wins_over_a_full_clipboard() {
-        let read = || -> Option<String> { panic!("the clipboard must not be read when text is selected") };
-        assert_eq!(selection_or_clipboard("selected".into(), read), ("selected".into(), false));
+        assert_eq!(selection_or_clipboard("selected".into(), true, no_read), Ok(("selected".into(), false)));
+        assert_eq!(selection_or_clipboard("selected".into(), false, no_read), Ok(("selected".into(), false)));
+    }
+
+    #[test]
+    fn an_unreadable_selected_range_never_uses_the_clipboard() {
+        assert!(selection_or_clipboard(String::new(), true, no_read).is_err());
     }
 
     #[test]
     fn no_selection_uses_the_clipboard() {
         let clipboard = || Some("on the clipboard".to_string());
-        assert_eq!(selection_or_clipboard(String::new(), clipboard), ("on the clipboard".into(), true));
+        assert_eq!(selection_or_clipboard(String::new(), false, clipboard), Ok(("on the clipboard".into(), true)));
         // Some apps copy a lone newline when nothing is selected.
-        assert_eq!(selection_or_clipboard("\n".into(), clipboard), ("on the clipboard".into(), true));
-        assert_eq!(selection_or_clipboard(String::new(), || None), (String::new(), true));
+        assert_eq!(selection_or_clipboard("\n".into(), false, clipboard), Ok(("on the clipboard".into(), true)));
+        assert_eq!(selection_or_clipboard(String::new(), false, || None), Ok((String::new(), true)));
     }
 }
