@@ -29,6 +29,8 @@ pub struct Config {
     pub local_model: String,
     pub pi_model: String,
     pub opencode_model: String,
+    pub claude_model: String,
+    pub codex_model: String,
 }
 
 impl Config {
@@ -46,6 +48,8 @@ impl Config {
             local_model: text("local_model"),
             pi_model: text("pi_model"),
             opencode_model: text("opencode_model"),
+            claude_model: text("claude_model"),
+            codex_model: text("codex_model"),
         }
     }
 
@@ -63,6 +67,8 @@ impl Config {
             ("local_model", serde_json::json!(self.local_model)),
             ("pi_model", serde_json::json!(self.pi_model)),
             ("opencode_model", serde_json::json!(self.opencode_model)),
+            ("claude_model", serde_json::json!(self.claude_model)),
+            ("codex_model", serde_json::json!(self.codex_model)),
         ];
         for (key, value) in fields {
             save(prefs, key, &value).map_err(|e| e.to_string())?;
@@ -106,6 +112,16 @@ impl Config {
                 cli::check_model("OpenCode", &model)?;
                 Ok(Provider::OpenCode { model })
             }
+            Some(Kind::ClaudeCode) => {
+                let model = exact_model(&self.claude_model, "Claude Code")?;
+                cli::check_model("Claude Code", &model)?;
+                Ok(Provider::ClaudeCode { model })
+            }
+            Some(Kind::Codex) => {
+                let model = exact_model(&self.codex_model, "Codex")?;
+                cli::check_model("Codex", &model)?;
+                Ok(Provider::Codex { model })
+            }
         }
     }
 }
@@ -115,7 +131,7 @@ impl Config {
     /// and the other models the local endpoint listed next to the local one, so each provider's
     /// rows stay together. A model ID is never typed in the popup.
     pub fn choices(&self, local_models: &[String]) -> Vec<Provider> {
-        let mut all: Vec<Provider> = [Kind::Local, Kind::Pi, Kind::OpenCode]
+        let mut all: Vec<Provider> = crate::provider::KINDS
             .into_iter()
             .filter_map(|kind| Config { provider: Some(kind), ..self.clone() }.provider().ok())
             .collect();
@@ -139,6 +155,8 @@ impl Config {
             Provider::Local { .. } => self.local_model = model,
             Provider::Pi { .. } => self.pi_model = model,
             Provider::OpenCode { .. } => self.opencode_model = model,
+            Provider::ClaudeCode { .. } => self.claude_model = model,
+            Provider::Codex { .. } => self.codex_model = model,
         }
     }
 }

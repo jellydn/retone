@@ -1,4 +1,4 @@
-//! `retone --cli-check`: runs rewrites of a fixed sample through the real Pi or OpenCode adapter,
+//! `retone --cli-check`: runs rewrites of a fixed sample through the real CLI adapter,
 //! so `scripts/cli-history-check.sh` can prove that the installed CLI version writes no history.
 //!
 //! The installed version counts as verified for this run only; that is what the check tests. The
@@ -12,7 +12,7 @@
 #![forbid(unsafe_code)]
 
 use crate::eval::flag;
-use crate::provider::{Cancel, Env, Kind, Outcome, cli, opencode, pi};
+use crate::provider::{Cancel, Env, Kind, Outcome, claude, cli, codex, opencode, pi};
 use crate::styles::Style;
 
 /// Sample text only: the check never sends user text.
@@ -44,7 +44,9 @@ fn run(args: &[String]) -> Result<bool, String> {
     let (kind, program) = match flag(args, "--provider").ok_or("--provider is required")? {
         "pi" => (Kind::Pi, &env.pi_program),
         "opencode" => (Kind::OpenCode, &env.opencode_program),
-        other => return Err(format!("unknown provider {other} (use pi or opencode)")),
+        "claude" => (Kind::ClaudeCode, &env.claude_program),
+        "codex" => (Kind::Codex, &env.codex_program),
+        other => return Err(format!("unknown provider {other} (use pi, opencode, claude or codex)")),
     };
     let name = kind.name();
     let version = cli::installed_version(program).ok_or_else(|| format!("cannot read the {name} version"))?;
@@ -53,7 +55,12 @@ fn run(args: &[String]) -> Result<bool, String> {
 
     let mut passed = true;
     for i in 1..=runs {
-        let rewrite = if kind == Kind::Pi { pi::rewrite } else { opencode::rewrite };
+        let rewrite = match kind {
+            Kind::Pi => pi::rewrite,
+            Kind::OpenCode => opencode::rewrite,
+            Kind::ClaudeCode => claude::rewrite,
+            _ => codex::rewrite,
+        };
         let Outcome { answer, wrote_files } =
             rewrite(&verified, program, model, &Style::Clear, SAMPLE, &Cancel::default(), &env.home);
         // A failed rewrite did not run the whole path, so it cannot count as a pass.

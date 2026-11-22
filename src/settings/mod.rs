@@ -90,6 +90,8 @@ pub struct SettingsUi {
     pub local_model: TextEdit,
     pub pi_model: TextEdit,
     pub opencode_model: TextEdit,
+    pub claude_model: TextEdit,
+    pub codex_model: TextEdit,
     pub custom_style: TextEdit,
     pub provider_choice: Option<Kind>,
     pub update_channel: UpdateChannel,
@@ -138,6 +140,8 @@ impl SettingsUi {
             local_model: TextEdit::new(&config.local_model),
             pi_model: TextEdit::new(&config.pi_model),
             opencode_model: TextEdit::new(&config.opencode_model),
+            claude_model: TextEdit::new(&config.claude_model),
+            codex_model: TextEdit::new(&config.codex_model),
             custom_style: TextEdit::new(&config.custom_style),
             provider_choice: config.provider,
             update_channel: UpdateChannel::default(),
@@ -324,6 +328,8 @@ impl SettingsUi {
         next.local_model = self.local_model.text.trim().to_string();
         next.pi_model = self.pi_model.text.trim().to_string();
         next.opencode_model = self.opencode_model.text.trim().to_string();
+        next.claude_model = self.claude_model.text.trim().to_string();
+        next.codex_model = self.codex_model.text.trim().to_string();
         let checked = match next.provider {
             None => Ok(t!("settings.provider.saved_none").to_string()),
             Some(_) => {
@@ -355,6 +361,8 @@ impl SettingsUi {
             Kind::Local => (&mut self.local_model, &self.config.local_model),
             Kind::Pi => (&mut self.pi_model, &self.config.pi_model),
             Kind::OpenCode => (&mut self.opencode_model, &self.config.opencode_model),
+            Kind::ClaudeCode => (&mut self.claude_model, &self.config.claude_model),
+            Kind::Codex => (&mut self.codex_model, &self.config.codex_model),
         };
         *field = TextEdit::new(model);
     }
@@ -414,8 +422,9 @@ impl SettingsUi {
 
     pub fn refresh_disabled(&mut self) {
         let prefs = self.shared.prefs();
-        self.disabled = [Kind::Pi, Kind::OpenCode]
+        self.disabled = crate::provider::KINDS
             .into_iter()
+            .filter(|kind| *kind != Kind::Local)
             .filter_map(|kind| consent::disabled_reason(&prefs, kind).map(|reason| (kind, reason)))
             .collect();
     }
@@ -466,6 +475,11 @@ pub const SCENES: &[Scene] = &[
         s.opencode_model = TextEdit::new("opencode/beam-free");
         s.provider_status = Some(Ok("Saved: OpenCode · opencode/beam-free".into()));
         s.advanced_open = true;
+    }),
+    ("provider-claude", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::ClaudeCode);
+        s.claude_model = TextEdit::new("claude-haiku-5-5");
     }),
     ("styles", |s| s.page = Page::Styles),
     ("styles-shortcuts", |s| {

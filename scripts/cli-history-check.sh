@@ -1,10 +1,12 @@
 #!/bin/sh
-# Release gate for the CLI providers: proves that the installed Pi or OpenCode version writes no
+# Release gate for the CLI providers: proves that the installed CLI version writes no
 # history when Retone runs it. Run it on a real Mac before each release and whenever a supported
 # CLI version changes. Add a version to VERIFIED in src/provider/<cli>.rs only after it passes.
 #
 #   sh scripts/cli-history-check.sh pi ollama/qwen2.5:3b [runs]
 #   sh scripts/cli-history-check.sh opencode opencode/<model>-free [runs]
+#   sh scripts/cli-history-check.sh claude claude-haiku-5-5 [runs]
+#   sh scripts/cli-history-check.sh codex <model> [runs]
 #
 # It records the path, size, modification time and SHA-256 of every file under the CLI's data folders,
 # runs the rewrites through Retone's own adapter code (`retone --cli-check`), records again, and
@@ -13,7 +15,7 @@
 set -eu
 
 usage() {
-	echo "usage: sh scripts/cli-history-check.sh pi|opencode MODEL [RUNS]" >&2
+	echo "usage: sh scripts/cli-history-check.sh pi|opencode|claude|codex MODEL [RUNS]" >&2
 	exit 2
 }
 
@@ -33,6 +35,23 @@ pi)
 opencode)
 	set -- "$HOME/.local/share/opencode" "$HOME/.local/state/opencode" "$HOME/.cache/opencode" "$HOME/.config/opencode"
 	source_file=src/provider/opencode.rs
+	;;
+claude)
+	# CLAUDE_CONFIG_DIR moves the config folder (and its .claude.json) when set. ~/.claude.json is a
+	# file; find and stat take it like a folder with one entry.
+	case ${CLAUDE_CONFIG_DIR:-} in
+	'' | /*) ;;
+	*)
+		echo "FAIL: CLAUDE_CONFIG_DIR must be an absolute path (it is '$CLAUDE_CONFIG_DIR')." >&2
+		exit 1
+		;;
+	esac
+	set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "$HOME/.claude.json"
+	source_file=src/provider/claude.rs
+	;;
+codex)
+	set -- "${CODEX_HOME:-$HOME/.codex}"
+	source_file=src/provider/codex.rs
 	;;
 *) usage ;;
 esac
@@ -60,11 +79,11 @@ snapshot() {
 	for dir in "$@"; do
 		if [ -e "$dir" ]; then
 			{
-				find "$dir" ! -type d -exec stat -f '%m %z %N' {} +
-				find "$dir" -type f -exec shasum -a 256 {} +
-				find "$dir" -type d -exec stat -f 'folder %N' {} +
+				find -H "$dir" ! -type d -exec stat -f '%m %z %N' {} +
+				find -H "$dir" -type f -exec shasum -a 256 {} +
+				find -H "$dir" -type d -exec stat -f 'folder %N' {} +
 			} >>"$out.raw"
-			find "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
+			find -H "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
 		else
 			# [ -e ] is also false when a parent folder cannot be read. Only "No such file or
 			# directory" means missing; any other error stops the check, because both snapshots

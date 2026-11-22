@@ -27,7 +27,7 @@
 ## Installation Requirements
 
 - macOS 14 or later on Apple Silicon (tested on macOS 27 only)
-- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp), [Pi](https://github.com/badlogic/pi-mono), or [OpenCode](https://opencode.ai)
+- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), Claude Code or Codex
 
 > [!IMPORTANT]
 > **First launch security warning**
@@ -52,7 +52,7 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 - 🛡️ **Safe replace**: Retone replaces only when the same app, field and selection are still there; on failure or cancel nothing changes, and your clipboard comes back
 - 🔀 **Switch provider in the popup**: click the provider label or press ⌘P to pick another provider or local model; Retone keeps the choice
 - 🏠 **Local AI**: any OpenAI-compatible server on this Mac, or, after you turn it on, on your LAN or Tailscale; `http://` or `https://`
-- 🧰 **CLI providers**: Pi and OpenCode, run with no sessions, no tools and no history
+- 🧰 **CLI providers**: Pi, OpenCode, Claude Code and Codex, run with no sessions, no tools and no history
 - 🔒 **No history**: the 2,000-character input limit, no text in logs, settings store no text
 - 🎨 **Themes**: System, Dark, Light, or Kanagawa Lotus
 - 🔄 **Updates**: Homebrew (`brew upgrade`), or Sparkle in builds signed for it
@@ -128,22 +128,24 @@ Retone does not run when Retone itself is in front, and refuses selections longe
 
 Settings has a sidebar of pages. Each page is one card of rows, with rarely used settings under **Advanced**. The sidebar footer shows **What's new**, the version, and how this copy updates.
 
-| Page     | What it does                                                                                                        |
-| -------- | ------------------------------------------------------------------------------------------------------------------- |
-| General  | Record the global hotkey and test it, default style, theme, Accessibility status, and **Launch at login**.          |
-| Provider | Choose Local AI, Pi or OpenCode. For Local AI: address (with presets), LAN and Tailscale switch, API key and model. |
-| Styles   | Default style and your custom instruction.                                                                          |
-| Privacy  | The no-history rules, **Revoke all** consent, and turning an adapter on again after the guard.                      |
+| Page     | What it does                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| General  | Record the global hotkey and test it, default style, theme, Accessibility status, and **Launch at login**.                              |
+| Provider | Choose Local AI, Pi, OpenCode, Claude Code or Codex. For Local AI: address (with presets), LAN and Tailscale switch, API key and model. |
+| Styles   | Default style and your custom instruction.                                                                                              |
+| Privacy  | The no-history rules, **Revoke all** consent, and turning an adapter on again after the guard.                                          |
 
 ## Providers and the no-history rules
 
 Retone asks for consent the first time it sends text to a provider and model, and saves that consent per provider and model. A Local AI server outside this Mac also gets its own consent per host.
 
-| Provider | How Retone runs it                                                                                                                                                                                                                                                                                                                                 |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local AI | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`, streamed into the preview (Copy and Replace wait for the end). Presets for Ollama (`127.0.0.1:11434`), LM Studio (`127.0.0.1:1234`) and llama.cpp (`127.0.0.1:8080`). Optional API key in the Keychain. See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
-| Pi       | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2.                                                                                                                                                                               |
-| OpenCode | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                                                                                                                                                                          |
+| Provider    | How Retone runs it                                                                                                                                                                                                                                                                                                                                 |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local AI    | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`, streamed into the preview (Copy and Replace wait for the end). Presets for Ollama (`127.0.0.1:11434`), LM Studio (`127.0.0.1:1234`) and llama.cpp (`127.0.0.1:8080`). Optional API key in the Keychain. See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
+| Pi          | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2.                                                                                                                                                                               |
+| OpenCode    | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                                                                                                                                                                          |
+| Claude Code | `claude -p --no-session-persistence` with tools, MCP servers, hooks and skills off, and prompt history skipped. Your user settings stay loaded for the API address and login. **Not verified yet**: Retone refuses it until the no-history check passes.                                                                                           |
+| Codex       | `codex exec --ephemeral` in a read-only sandbox, without your `config.toml`, with the shell, memories, plugins and browser off. **Not verified yet**: Retone refuses it until the no-history check passes.                                                                                                                                         |
 
 ### Choosing a local model
 
@@ -173,7 +175,7 @@ Rules for every CLI provider:
 - Retone checks the CLI version and refuses versions it does not know.
 - The text goes on stdin, never in arguments, so other processes cannot read it from the process list.
 - Each run uses a `0700` temporary folder that Retone deletes afterwards.
-- A guard compares the CLI's own data folders before and after each run (Pi: `~/.pi/agent/sessions`; OpenCode: its `~/.local/share`, `~/.local/state`, `~/.cache` and `~/.config` folders). When one changes, Retone turns that adapter off and names the folder. Other locations are not watched.
+- A guard compares the CLI's own data folders before and after each run (Pi: `~/.pi/agent/sessions`; OpenCode: its `~/.local/share`, `~/.local/state`, `~/.cache` and `~/.config` folders; Claude Code: `~/.claude/projects`; Codex: `~/.codex/sessions` and `~/.codex/memories`). When one changes, Retone turns that adapter off and names the folder. Other locations are not watched.
 - A run that takes too long is stopped with its whole process group.
 - Your provider still sees the text. For OpenCode with a hosted model, that model's provider sees it too.
 

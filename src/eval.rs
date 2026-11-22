@@ -72,6 +72,8 @@ fn run(args: &[String]) -> Result<bool, String> {
         }
         "pi" => Provider::Pi { model },
         "opencode" => Provider::OpenCode { model },
+        "claude" => Provider::ClaudeCode { model },
+        "codex" => Provider::Codex { model },
         other => return Err(format!("unknown provider {other}")),
     };
     let mut env = Env::system().ok_or("HOME is not set")?;
