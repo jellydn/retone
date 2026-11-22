@@ -221,7 +221,7 @@ fn status_line(k: &Kit, result: &Result<String, String>) -> El {
     text(body).font(k.ty.text_small).color(color).wrap()
 }
 
-fn style_names() -> Vec<&'static str> {
+pub fn style_names() -> Vec<&'static str> {
     let mut names: Vec<&str> = PRESETS.iter().map(|style| style.name()).collect();
     names.push("Custom");
     names
@@ -233,21 +233,25 @@ fn default_style_row(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     setting(k, "default-style", &glyphs::SPARKLE, "Default style", help(k, "The style the popup starts with."), control)
 }
 
-fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
+/// The error under a recorder: who holds a conflicting chord, or why Retone refused it.
+fn recorder_message(s: &SettingsUi) -> impl Fn(&ShortcutError, Option<&Shortcut>) -> String + 'static {
     let owner = s.conflict_owner.clone();
-    let message = move |error: &ShortcutError, chord: Option<&Shortcut>| match (error, chord, &owner) {
+    move |error: &ShortcutError, chord: Option<&Shortcut>| match (error, chord, &owner) {
         (ShortcutError::Conflict, Some(chord), Some(owner)) => {
             format!("{} is used by {owner}.", chord.keycaps().join(" "))
         }
         (ShortcutError::Conflict, _, None) => "Another app holds this shortcut.".into(),
         (ShortcutError::InvalidAccelerator(reason), _, _) => reason.clone(),
         _ => shortcut_error_message(error, chord),
-    };
+    }
+}
+
+fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let recorder = ShortcutRecorder::new("shortcut", &s.recorder, |s: &mut SettingsUi| &mut s.recorder)
         .label("Rewrite selection")
         .width(200.0)
         .on_change(|s: &mut SettingsUi, next, _: &mut Tx| s.change_hotkey(next))
-        .error_message(message)
+        .error_message(recorder_message(s))
         .build(k);
     let shortcut_help = if s.recorder.shortcut().is_none() {
         "Record one to start. Until then, use Rewrite Selection in the menu bar."
@@ -570,29 +574,60 @@ fn styles_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let custom_link = value_link(k, "custom-link", custom_value, |s: &mut SettingsUi| {
         s.sub_page = Some(SubPage::CustomStyle);
     });
-    col().w_full().gap(16.0).child(page_title(k, "Styles")).child(card(
-        k,
-        "styles-card",
-        vec![
-            default_style_row(s, k, layer),
-            setting(
-                k,
-                "custom",
-                &STYLES,
-                "Custom style",
-                help(k, "Your own instruction, as one more style."),
-                custom_link,
-            ),
-            setting(
-                k,
-                "built-in",
-                &LAYERS,
-                "Built-in styles",
-                help(k, "Clear, Concise, Professional and Technical, each with its own rules and example."),
-                el(),
-            ),
-        ],
-    ))
+    col()
+        .w_full()
+        .gap(16.0)
+        .child(page_title(k, "Styles"))
+        .child(card(
+            k,
+            "styles-card",
+            vec![
+                default_style_row(s, k, layer),
+                setting(
+                    k,
+                    "custom",
+                    &STYLES,
+                    "Custom style",
+                    help(k, "Your own instruction, as one more style."),
+                    custom_link,
+                ),
+                setting(
+                    k,
+                    "built-in",
+                    &LAYERS,
+                    "Built-in styles",
+                    help(k, "Clear, Concise, Professional and Technical, each with its own rules and example."),
+                    el(),
+                ),
+            ],
+        ))
+        .child(card(k, "style-shortcuts-card", style_shortcut_rows(s, k)))
+}
+
+/// One optional shortcut per style; it opens the popup in that style. Custom needs its
+/// instruction first.
+fn style_shortcut_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
+    let custom_set = !s.config.custom_style.trim().is_empty();
+    style_names()
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let disabled = index == PRESETS.len() && !custom_set;
+            let recorder = ShortcutRecorder::new(
+                format!("style-shortcut-{index}"),
+                &s.style_recorders[index],
+                move |s: &mut SettingsUi| &mut s.style_recorders[index],
+            )
+            .label(format!("Rewrite in the {name} style"))
+            .width(200.0)
+            .disabled(disabled)
+            .on_change(move |s: &mut SettingsUi, next, _: &mut Tx| s.change_style_hotkey(index, next))
+            .error_message(recorder_message(s))
+            .build(k);
+            let note = if disabled { "Set the custom style first." } else { "Opens the popup in this style." };
+            setting(k, &format!("style-shortcut-row-{index}"), &glyphs::KEYBOARD, name, help(k, note), recorder)
+        })
+        .collect()
 }
 
 fn custom_style_page(s: &SettingsUi, k: &Kit) -> El {
