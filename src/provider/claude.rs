@@ -10,7 +10,7 @@ use super::cli::{self, Run, WorkDir};
 use super::{Cancel, Outcome};
 use crate::styles::{self, Style};
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Versions that passed `scripts/cli-history-check.sh`. Add one only after the check passes.
 pub const VERIFIED: &[&str] = &[];
@@ -53,9 +53,18 @@ pub fn rewrite(
         args,
         envs: vec![("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "1".into()), ("DISABLE_AUTOUPDATER", "1".into())],
         // Sessions go to projects/<folder>/; a new folder there changes its time. The release
-        // gate checks all of ~/.claude and ~/.claude.json.
-        data_dirs: vec![home.join(".claude/projects")],
+        // gate checks all of the config folder and ~/.claude.json.
+        data_dirs: vec![config_dir(home).join("projects")],
         stdin: styles::build_single(style, text),
     };
     cli::execute(run, &workdir, text, cancel, home)
+}
+
+/// Where Claude Code keeps its settings and sessions: `CLAUDE_CONFIG_DIR`, else `~/.claude`. The
+/// child inherits the variable; the release gate uses the same rule.
+fn config_dir(home: &Path) -> PathBuf {
+    rune_core::env::var("CLAUDE_CONFIG_DIR")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".claude"))
 }

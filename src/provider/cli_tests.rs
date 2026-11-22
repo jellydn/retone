@@ -188,6 +188,19 @@ fn a_cli_that_writes_into_its_data_folder_is_reported_and_nothing_is_deleted() {
 }
 
 #[test]
+fn a_codex_session_in_an_existing_day_folder_is_reported() {
+    let dir = WorkDir::new().expect("dir");
+    let day = dir.path().join("home/.codex/sessions/2026/11/22");
+    std::fs::create_dir_all(&day).expect("day");
+    let stub = Stub::new("0.171.0", &format!("echo s > '{}/rollout.jsonl'; echo ok", day.display()));
+    let home = dir.path().join("home");
+    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &home);
+    assert_eq!(out.answer, Ok("ok".into()));
+    // Reported as the data folder that holds the change.
+    assert_eq!(out.wrote_files, Some(home.join(".codex/sessions")));
+}
+
+#[test]
 fn cancel_kills_the_child_and_errors_are_redacted() {
     let stub = Stub::new("1.5.2", "sleep 30");
     let cancel = Cancel::default();
