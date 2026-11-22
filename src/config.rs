@@ -15,6 +15,9 @@ pub const APP_ID: &str =
 pub struct Config {
     /// Rune accelerator string, such as `alt+super+r`. None until the user records one.
     pub hotkey: Option<String>,
+    /// Optional shortcuts that open the popup in one style, by style index (the presets, then
+    /// Custom), as `default_style` counts. Missing entries are None.
+    pub style_hotkeys: Vec<Option<String>>,
     pub theme: Theme,
     /// Index into the presets, or `PRESETS.len()` for the custom style.
     pub default_style: usize,
@@ -33,6 +36,7 @@ impl Config {
         let text = |key: &str| prefs.get::<String>(key).unwrap_or_default();
         Config {
             hotkey: prefs.get("hotkey"),
+            style_hotkeys: prefs.get("style_hotkeys").unwrap_or_default(),
             theme: prefs.get("theme").unwrap_or_default(),
             default_style: prefs.get("default_style").unwrap_or(0),
             custom_style: text("custom_style"),
@@ -49,6 +53,7 @@ impl Config {
         let save = |prefs: &mut Prefs, key: &str, value: &serde_json::Value| prefs.set(key, value);
         let fields = [
             ("hotkey", serde_json::json!(self.hotkey)),
+            ("style_hotkeys", serde_json::json!(self.style_hotkeys)),
             ("theme", serde_json::json!(self.theme)),
             ("default_style", serde_json::json!(self.default_style)),
             ("custom_style", serde_json::json!(self.custom_style)),
@@ -67,8 +72,14 @@ impl Config {
 
     /// The style a new rewrite starts with; an empty custom style falls back to Clear.
     pub fn style(&self) -> Style {
+        self.style_at(self.default_style)
+    }
+
+    /// The style at `index`: a preset, or Custom past the presets. An empty custom style falls
+    /// back to Clear.
+    pub fn style_at(&self, index: usize) -> Style {
         let presets = crate::styles::PRESETS;
-        match presets.get(self.default_style) {
+        match presets.get(index) {
             Some(style) => style.clone(),
             None if !self.custom_style.trim().is_empty() => Style::Custom(self.custom_style.trim().to_string()),
             None => Style::Clear,
@@ -158,6 +169,7 @@ mod tests {
         let mut prefs = Prefs::memory();
         let config = Config {
             hotkey: Some("alt+super+r".into()),
+            style_hotkeys: vec![None, Some("ctrl+alt+2".into())],
             theme: Theme::KanagawaLotus,
             default_style: 4,
             custom_style: "Make it friendly.".into(),
@@ -169,6 +181,7 @@ mod tests {
         let loaded = Config::load(&prefs);
         assert_eq!(loaded, config);
         assert_eq!(loaded.style(), Style::Custom("Make it friendly.".into()));
+        assert_eq!(loaded.style_at(1), Style::Concise);
         assert_eq!(loaded.provider(), Ok(Provider::OpenCode { model: "opencode/beam-free".into() }));
     }
 

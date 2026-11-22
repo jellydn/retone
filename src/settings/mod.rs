@@ -13,6 +13,7 @@ use crate::config::Config;
 use crate::popup::Popup;
 use crate::provider::{Kind, consent, local};
 use crate::shared::Shared;
+use crate::styles::PRESETS;
 use crate::updates::UpdateChannel;
 use rune::{AppHandle, Latest, Shortcut, ShortcutError, ShortcutId, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
@@ -45,6 +46,16 @@ pub enum HotkeyTest {
     Passed,
 }
 
+/// One optional shortcut per style: the presets, then Custom.
+pub const STYLE_SLOTS: usize = PRESETS.len() + 1;
+
+/// Which shortcut a recorder sets: the main one, or the one for the style at this index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Slot {
+    Main,
+    Style(usize),
+}
+
 /// Popup keys a global shortcut must not take, or the popup could not use them.
 const POPUP_CHORDS: [&str; 3] = ["super+c", "super+r", "super+p"];
 
@@ -60,6 +71,7 @@ pub struct SettingsUi {
     pub login_error: Option<String>,
     pub config: Config,
     pub recorder: ShortcutRecorderState,
+    pub style_recorders: Vec<ShortcutRecorderState>,
     pub hotkey_test: HotkeyTest,
     /// Who holds the chord the last conflict refused, when Rune can tell.
     pub conflict_owner: Option<String>,
@@ -85,6 +97,7 @@ pub struct SettingsUi {
     shared: Arc<Shared>,
     popup: Option<AppHandle<Popup>>,
     registration: Option<ShortcutId>,
+    style_registrations: Vec<Option<ShortcutId>>,
 }
 
 impl Default for SettingsUi {
@@ -105,6 +118,12 @@ impl SettingsUi {
             launch_at_login: false,
             login_error: None,
             recorder: ShortcutRecorderState::new(config.hotkey.as_deref().and_then(|h| h.parse().ok())),
+            style_recorders: (0..STYLE_SLOTS)
+                .map(|i| {
+                    let saved = config.style_hotkeys.get(i).cloned().flatten();
+                    ShortcutRecorderState::new(saved.and_then(|h| h.parse().ok()))
+                })
+                .collect(),
             hotkey_test: HotkeyTest::Idle,
             conflict_owner: None,
             endpoint: TextEdit::new(&config.local_endpoint),
@@ -126,6 +145,7 @@ impl SettingsUi {
             shared,
             popup,
             registration: None,
+            style_registrations: vec![None; STYLE_SLOTS],
         };
         ui.refresh_disabled();
         ui.refresh_launch_at_login();
@@ -177,16 +197,28 @@ impl SettingsUi {
         true
     }
 
-    /// At launch: registers the saved hotkey. A failure leaves the chord shown with its error.
+    /// At launch: registers the saved hotkeys. A failure leaves the chord shown with its error.
     pub fn register_saved(&mut self) {
-        let Some(shortcut) = self.recorder.shortcut().cloned() else { return };
-        if self.register(Some(&shortcut)).is_err() {
-            self.recorder.mark_unregistered();
+        let slots = std::iter::once(Slot::Main).chain((0..STYLE_SLOTS).map(Slot::Style));
+        for slot in slots {
+            let Some(shortcut) = self.recorder_mut(slot).shortcut().cloned() else { continue };
+            if self.register(slot, Some(&shortcut)).is_err() {
+                self.recorder_mut(slot).mark_unregistered();
+            }
         }
     }
 
-    /// The recorder's change: refuse popup chords, register the new chord, then save it.
     pub fn change_hotkey(&mut self, next: Option<&Shortcut>) -> Result<(), ShortcutError> {
+        self.change_shortcut(Slot::Main, next)
+    }
+
+    pub fn change_style_hotkey(&mut self, index: usize, next: Option<&Shortcut>) -> Result<(), ShortcutError> {
+        self.change_shortcut(Slot::Style(index), next)
+    }
+
+    /// A recorder's change: refuse popup chords and chords another Retone shortcut uses,
+    /// register the new chord, then save it.
+    fn change_shortcut(&mut self, slot: Slot, next: Option<&Shortcut>) -> Result<(), ShortcutError> {
         if let Some(chord) = next {
             let name = chord.to_string();
             if !["ctrl+", "alt+", "super+"].iter().any(|m| name.contains(m)) {
@@ -195,25 +227,62 @@ impl SettingsUi {
             if POPUP_CHORDS.contains(&name.as_str()) {
                 return Err(ShortcutError::InvalidAccelerator("The popup uses this shortcut.".into()));
             }
+            if let Some(owner) = self.retone_owner(&name, slot) {
+                return Err(ShortcutError::InvalidAccelerator(format!("Retone uses this shortcut for {owner}.")));
+            }
         }
-        let result = self.register(next);
+        let result = self.register(slot, next);
         self.conflict_owner = match (&result, next, &self.popup) {
             (Err(ShortcutError::Conflict), Some(chord), Some(popup)) => popup.shortcut_owner(chord),
             _ => None,
         };
         result?;
-        self.config.hotkey = next.map(|chord| chord.to_string());
+        let saved = next.map(|chord| chord.to_string());
+        match slot {
+            Slot::Main => self.config.hotkey = saved,
+            Slot::Style(index) => {
+                self.config.style_hotkeys.resize(STYLE_SLOTS, None);
+                self.config.style_hotkeys[index] = saved;
+            }
+        }
         self.save();
         Ok(())
     }
 
+    /// The other Retone shortcut that already uses `chord`, named for the error message.
+    fn retone_owner(&self, chord: &str, slot: Slot) -> Option<String> {
+        if slot != Slot::Main && self.config.hotkey.as_deref() == Some(chord) {
+            return Some("Rewrite selection".into());
+        }
+        let names = view::style_names();
+        self.config.style_hotkeys.iter().enumerate().find_map(|(index, saved)| {
+            (slot != Slot::Style(index) && saved.as_deref() == Some(chord))
+                .then(|| format!("the {} style", names.get(index).copied().unwrap_or("Custom")))
+        })
+    }
+
+    fn recorder_mut(&mut self, slot: Slot) -> &mut ShortcutRecorderState {
+        match slot {
+            Slot::Main => &mut self.recorder,
+            Slot::Style(index) => &mut self.style_recorders[index],
+        }
+    }
+
     /// Registers `next` before dropping the old chord, so a refused chord keeps the old one.
-    fn register(&mut self, next: Option<&Shortcut>) -> Result<(), ShortcutError> {
+    fn register(&mut self, slot: Slot, next: Option<&Shortcut>) -> Result<(), ShortcutError> {
         let popup = self.popup.as_ref().ok_or(ShortcutError::NotRunning)?;
         let new = next
-            .map(|chord| popup.register_shortcut(chord.clone(), |p: &mut Popup, tx: &mut Tx| p.on_hotkey(tx)))
+            .map(|chord| match slot {
+                Slot::Main => popup.register_shortcut(chord.clone(), |p: &mut Popup, tx: &mut Tx| p.on_hotkey(tx)),
+                Slot::Style(index) => popup
+                    .register_shortcut(chord.clone(), move |p: &mut Popup, tx: &mut Tx| p.on_style_hotkey(index, tx)),
+            })
             .transpose()?;
-        if let Some(old) = self.registration
+        let current = match slot {
+            Slot::Main => &mut self.registration,
+            Slot::Style(index) => &mut self.style_registrations[index],
+        };
+        if let Some(old) = *current
             && let Err(error) = popup.unregister_shortcut(old)
         {
             if let Some(new) = new {
@@ -221,7 +290,7 @@ impl SettingsUi {
             }
             return Err(error);
         }
-        self.registration = new;
+        *current = new;
         Ok(())
     }
 
@@ -391,6 +460,10 @@ pub const SCENES: &[Scene] = &[
         s.advanced_open = true;
     }),
     ("styles", |s| s.page = Page::Styles),
+    ("styles-shortcuts", |s| {
+        s.page = Page::Styles;
+        s.style_recorders[1] = ShortcutRecorderState::new("ctrl+alt+2".parse().ok());
+    }),
     ("styles-custom", |s| {
         s.page = Page::Styles;
         s.sub_page = Some(SubPage::CustomStyle);
@@ -453,6 +526,22 @@ mod tests {
             assert!(matches!(ui.change_hotkey(Some(&shortcut)), Err(ShortcutError::InvalidAccelerator(_))), "{chord}");
         }
         assert_eq!(ui.shared.config().hotkey, None);
+    }
+
+    #[test]
+    fn a_chord_used_by_another_retone_shortcut_is_refused() {
+        let mut ui = SettingsUi::default();
+        ui.config.hotkey = Some("alt+super+r".into());
+        ui.config.style_hotkeys = vec![None, Some("ctrl+alt+2".into())];
+        let main: Shortcut = "alt+super+r".parse().expect("parse");
+        let concise: Shortcut = "ctrl+alt+2".parse().expect("parse");
+        let refused =
+            |result| matches!(result, Err(ShortcutError::InvalidAccelerator(reason)) if reason.contains("Retone uses"));
+        assert!(refused(ui.change_style_hotkey(0, Some(&main))), "a style cannot take the main chord");
+        assert!(refused(ui.change_style_hotkey(0, Some(&concise))), "nor another style's chord");
+        assert!(refused(ui.change_hotkey(Some(&concise))), "the main shortcut cannot take a style's chord");
+        // Its own chord is not a duplicate: it reaches registration (no running app here).
+        assert!(matches!(ui.change_style_hotkey(1, Some(&concise)), Err(ShortcutError::NotRunning)));
     }
 
     #[test]

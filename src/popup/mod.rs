@@ -109,6 +109,15 @@ impl Popup {
 
     /// The user's global shortcut, or the menu item Rewrite Selection.
     pub fn on_hotkey(&mut self, tx: &mut Tx) {
+        self.open(None, tx);
+    }
+
+    /// A style's own shortcut: the same as the main one, but the rewrite starts in that style.
+    pub fn on_style_hotkey(&mut self, index: usize, tx: &mut Tx) {
+        self.open(Some(index), tx);
+    }
+
+    fn open(&mut self, style: Option<usize>, tx: &mut Tx) {
         let Some(links) = self.links.as_ref() else { return };
         if links.shared.take_testing() {
             links.settings.update(|settings, _| settings.hotkey_tested());
@@ -125,7 +134,7 @@ impl Popup {
         self.provider = checked.ok();
         self.adapter_warning = None;
         self.picker = None;
-        self.flow.default_style = self.config.style();
+        self.flow.default_style = style.map_or_else(|| self.config.style(), |index| self.config.style_at(index));
         let effects = self.flow.step(Event::Hotkey { has_provider: self.provider.is_some() });
         self.run(effects, tx);
     }
