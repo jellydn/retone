@@ -21,6 +21,7 @@ target/debug/retone [--window settings] --scene NAME --snap out.png --theme dark
 ```
 
 `RETONE_SPIKE_LOG=1` prints capture and replace diagnostics to stderr. It never prints text.
+`RETONE_APPLY_OVERRIDE=bundle.id=paste|ax-set|copy-only,...` tries a write strategy for one app without a rebuild.
 
 ## Layout
 
@@ -29,7 +30,8 @@ src/
 ├── main.rs        # app and window setup; native start in real runs only
 ├── flow.rs        # popup state machine (pure; tests in flow_tests.rs)
 ├── capture.rs     # selection capture: AX, then ⌘C, then clipboard mode
-├── apply.rs       # replace checks and paste
+├── apply.rs       # replace checks, then paste or AX set
+├── strategy.rs    # per-app write strategy table (pure)
 ├── placement.rs   # popup position (caret, then pointer)
 ├── native.rs      # worker thread that owns the pasteboard and the AX element
 ├── provider/      # local (HTTP/HTTPS, loopback or private network), cli runner, pi, opencode, consent

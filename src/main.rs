@@ -22,6 +22,7 @@ mod provider;
 mod settings;
 mod shared;
 mod spike_log;
+mod strategy;
 mod styles;
 mod theme;
 mod updates;

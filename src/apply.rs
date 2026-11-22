@@ -1,28 +1,28 @@
-//! Replace: paste the rewrite over the selection, then restore the clipboard.
+//! Replace: write the rewrite over the selection with the app's strategy (see `strategy.rs`).
 //!
 //! Before anything changes, the frontmost app, the focused element and the selection must still
-//! match the capture; otherwise Replace is refused and Copy stays available. AX set (writing
-//! `AXSelectedText` directly) waits for the Phase 2 app matrix, because many apps report success
-//! without writing.
+//! match the capture; otherwise Replace is refused and Copy stays available. Paste restores the
+//! clipboard afterwards. AX set reads the text back, and a failed read-back is an error, never
+//! a paste: the write may have landed, and a paste would insert the text twice.
 
 use crate::capture::Capture;
 use crate::mac::{events, pasteboard::Board, screens};
 use crate::spike_log::spike;
+use crate::strategy::Strategy;
 use std::thread::sleep;
 use std::time::Duration;
 
-/// Time for the target app to read the pasteboard after ⌘V before the restore. Slow apps can
-/// still read later; then they paste the restored clipboard, which the per-app table in
-/// Phase 2 tunes.
-const PASTE_SETTLE: Duration = Duration::from_millis(400);
-
 pub fn replace(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), String> {
-    let result = paste_over(capture, rewrite, board);
-    spike!("replace app={} result={result:?}", screens::frontmost_bundle_id().unwrap_or_default());
+    let result = write_over(capture, rewrite, board);
+    spike!(
+        "replace app={} strategy={:?} result={result:?}",
+        screens::frontmost_bundle_id().unwrap_or_default(),
+        capture.strategy
+    );
     result
 }
 
-fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), String> {
+fn write_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), String> {
     let (Some(pid), Some(target)) = (capture.pid, capture.target.as_ref()) else {
         return Err("Retone cannot check where the text came from".into());
     };
@@ -33,6 +33,22 @@ fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
     if target.is_secure() {
         return Err("the field is a password field".into());
     }
+    match capture.strategy {
+        Strategy::CopyOnly => Err("this app is Copy only".into()),
+        Strategy::AxSet => {
+            if screens::frontmost_pid() != Some(pid) {
+                spike!("replace check failed: frontmost pid changed");
+                return Err("the selection changed".into());
+            }
+            target.set_selected_text(rewrite).map_err(String::from)
+        }
+        Strategy::Paste { settle } => paste_over(pid, rewrite, board, settle),
+    }
+}
+
+/// `settle` is the time for the target app to read the pasteboard after ⌘V before the restore.
+/// A slower app pastes the restored clipboard instead; the strategy table tunes it per app.
+fn paste_over(pid: i32, rewrite: &str, board: &Board, settle: Duration) -> Result<(), String> {
     if events::secure_input_on() {
         return Err("another app has secure keyboard input on".into());
     }
@@ -55,7 +71,7 @@ fn paste_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
         board.restore_if_unchanged(&snapshot, written);
         return Err("Retone could not send ⌘V".into());
     }
-    sleep(PASTE_SETTLE);
+    sleep(settle);
     // Skipped when the user copied something new meanwhile: never overwrite a newer copy.
     board.restore_if_unchanged(&snapshot, written);
     Ok(())
