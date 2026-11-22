@@ -4,7 +4,16 @@
 
 1. Set `version` in `Cargo.toml` (for example `0.1.0-beta.2`), and run `cargo build` to update `Cargo.lock`.
 2. Add a section at the top of [RELEASE_NOTES.md](RELEASE_NOTES.md) that starts with `## Retone <version> — <date>`.
-3. Merge to `main`, then push the tag:
+3. If a supported Pi or OpenCode version changed since the last release, run the no-history check on a Mac with that CLI installed, and add the version to `VERIFIED` in `src/provider/pi.rs` or `src/provider/opencode.rs` only when it passes:
+
+   ```bash
+   sh scripts/cli-history-check.sh pi ollama/qwen2.5:3b
+   sh scripts/cli-history-check.sh opencode ollama/qwen2.5:3b   # or an opencode/…-free model
+   ```
+
+   Do not use the CLI elsewhere while it runs. It never deletes the CLI's files.
+
+4. Merge to `main`, then push the tag:
 
    ```bash
    git tag v0.1.0-beta.2 && git push origin v0.1.0-beta.2

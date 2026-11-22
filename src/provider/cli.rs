@@ -56,7 +56,7 @@ pub struct Run<'a> {
     /// Shown in messages: "Pi", "OpenCode".
     pub name: &'static str,
     pub program: &'a Path,
-    pub verified: &'static [&'static str],
+    pub verified: &'a [&'a str],
     pub args: Vec<OsString>,
     pub envs: Vec<(&'static str, OsString)>,
     pub data_dirs: Vec<PathBuf>,

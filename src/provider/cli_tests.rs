@@ -40,7 +40,8 @@ const SECRET: &str = "the meeting are moved to tuesday";
 #[test]
 fn pi_runs_without_session_or_tools_and_gets_the_text_only_on_stdin() {
     let stub = Stub::new("1.5.2", "echo 'The meeting moved to Tuesday.'");
-    let out = pi::rewrite(&stub.program, "ollama/qwen", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out =
+        pi::rewrite(pi::VERIFIED, &stub.program, "ollama/qwen", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out, Outcome { answer: Ok("The meeting moved to Tuesday.".into()), wrote_files: None });
     let argv = stub.record("argv");
     for flag in ["-p", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files"] {
@@ -58,8 +59,15 @@ fn pi_runs_without_session_or_tools_and_gets_the_text_only_on_stdin() {
 #[test]
 fn opencode_keeps_its_data_in_memory_and_in_the_temp_folder() {
     let stub = Stub::new("2.3.0", "echo 'Done.'");
-    let out =
-        opencode::rewrite(&stub.program, "opencode/beam-free", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = opencode::rewrite(
+        opencode::VERIFIED,
+        &stub.program,
+        "opencode/beam-free",
+        &Style::Clear,
+        SECRET,
+        &Cancel::default(),
+        &stub.home,
+    );
     assert_eq!(out.answer, Ok("Done.".into()));
     let env = stub.record("env");
     // `pwd` resolves macOS's /var → /private/var link, so compare by the temp folder's name.
@@ -76,7 +84,15 @@ fn opencode_keeps_its_data_in_memory_and_in_the_temp_folder() {
 #[test]
 fn an_unverified_version_is_refused_before_any_request() {
     let stub = Stub::new("2.4.0", "echo never");
-    let out = opencode::rewrite(&stub.program, "opencode/x", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = opencode::rewrite(
+        opencode::VERIFIED,
+        &stub.program,
+        "opencode/x",
+        &Style::Clear,
+        SECRET,
+        &Cancel::default(),
+        &stub.home,
+    );
     assert_eq!(
         out.answer,
         Err("OpenCode 2.4.0 is not verified for no-history use. Retone supports OpenCode 2.3.0. \
@@ -98,7 +114,7 @@ fn a_cli_that_writes_into_its_data_folder_is_reported_and_nothing_is_deleted() {
     )
     .expect("wrapper");
     std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-    let out = pi::rewrite(&wrapper, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = pi::rewrite(pi::VERIFIED, &wrapper, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out.answer, Ok("ok".into()), "the result still shows");
     assert_eq!(out.wrote_files, Some(stub.home.join(".pi/agent/sessions")));
     assert!(stub.home.join(".pi/agent/sessions/new.jsonl").exists(), "Retone never deletes CLI files");
@@ -114,12 +130,13 @@ fn cancel_kills_the_child_and_errors_are_redacted() {
         flag.cancel();
     });
     let started = rune_core::time::now();
-    let out = pi::rewrite(&stub.program, "m", &Style::Clear, SECRET, &cancel, &stub.home);
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", &Style::Clear, SECRET, &cancel, &stub.home);
     assert_eq!(out.answer, Err("Cancelled.".into()));
     assert!(started.elapsed() < Duration::from_secs(5));
 
     let failing = Stub::new("1.5.2", &format!("echo 'Error: bad input {SECRET}' >&2; exit 1"));
-    let out = pi::rewrite(&failing.program, "m", &Style::Clear, SECRET, &Cancel::default(), &failing.home);
+    let out =
+        pi::rewrite(pi::VERIFIED, &failing.program, "m", &Style::Clear, SECRET, &Cancel::default(), &failing.home);
     assert_eq!(out.answer, Err("Pi failed: bad input [selected text]".into()));
 }
 
@@ -127,7 +144,8 @@ fn cancel_kills_the_child_and_errors_are_redacted() {
 fn model_ids_that_look_like_flags_are_refused() {
     let stub = Stub::new("1.5.2", "echo never");
     for model in ["", "--tools", "a b", "x\ny"] {
-        let out = pi::rewrite(&stub.program, model, &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+        let out =
+            pi::rewrite(pi::VERIFIED, &stub.program, model, &Style::Clear, SECRET, &Cancel::default(), &stub.home);
         assert!(out.answer.is_err(), "{model:?}");
     }
     assert_eq!(stub.record("stdin"), "");

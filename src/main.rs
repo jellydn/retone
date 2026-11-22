@@ -11,6 +11,7 @@ mod capture;
 mod config;
 mod eval;
 mod flow;
+mod history_check;
 mod input;
 #[cfg(target_os = "macos")]
 mod mac;
@@ -33,7 +34,7 @@ use shared::Shared;
 use std::sync::Arc;
 
 fn main() {
-    if let Some(code) = eval::run_from_args() {
+    if let Some(code) = eval::run_from_args().or_else(history_check::run_from_args) {
         std::process::exit(code);
     }
     let headless = rune::is_headless();

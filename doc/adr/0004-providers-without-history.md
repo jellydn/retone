@@ -20,4 +20,4 @@ Retone must not keep or leak writing history, but users want their own models: a
 
 ## Consequences
 
-- A new CLI version needs a check (and a version bump in the adapter) before Retone accepts it.
+- A new CLI version needs a check (and a version bump in the adapter) before Retone accepts it. The check is `scripts/cli-history-check.sh`: 5 rewrites through the adapter, with every file under the CLI's data folders compared before and after. A folder time change with no file left behind (Pi makes and deletes a lock file on every start) is only a note.

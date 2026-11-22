@@ -10,7 +10,16 @@ use std::path::Path;
 /// Versions that passed `scripts/cli-history-check.sh`. Add one only after the check passes.
 pub const VERIFIED: &[&str] = &["1.5.2"];
 
-pub fn rewrite(program: &Path, model: &str, style: &Style, text: &str, cancel: &Cancel, home: &Path) -> Outcome {
+/// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+pub fn rewrite(
+    verified: &[&str],
+    program: &Path,
+    model: &str,
+    style: &Style,
+    text: &str,
+    cancel: &Cancel,
+    home: &Path,
+) -> Outcome {
     let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("Pi", model) {
         return fail(error);
@@ -34,7 +43,7 @@ pub fn rewrite(program: &Path, model: &str, style: &Style, text: &str, cancel: &
     let run = Run {
         name: "Pi",
         program,
-        verified: VERIFIED,
+        verified,
         args,
         envs: vec![("PI_OFFLINE", "1".into())],
         data_dirs: vec![home.join(".pi/agent/sessions")],

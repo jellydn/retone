@@ -78,9 +78,9 @@ impl Provider {
             Provider::Local { endpoint, model } => {
                 Outcome::answer(local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text))
             }
-            Provider::Pi { model } => pi::rewrite(&env.pi_program, model, style, text, cancel, &env.home),
+            Provider::Pi { model } => pi::rewrite(pi::VERIFIED, &env.pi_program, model, style, text, cancel, &env.home),
             Provider::OpenCode { model } => {
-                opencode::rewrite(&env.opencode_program, model, style, text, cancel, &env.home)
+                opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, style, text, cancel, &env.home)
             }
         }
     }
