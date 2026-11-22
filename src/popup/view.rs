@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::flow::{Event, Notice, Phase, State};
 use crate::provider::consent;
 use crate::styles::{PRESETS, Style};
-use rune::{Cx, El, ScrollSpec, Tx, col, el, row, spacer, text};
+use rune::{Cx, El, ScrollSpec, Span, Tx, col, el, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, Kit, List, ListItem, Spinner};
 
 /// The styles the picker offers, in key order 1–5: the presets, then Custom when it is set.
@@ -198,9 +198,17 @@ fn consent_body(p: &Popup, k: &Kit) -> El {
 
 fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase, can_replace: bool) -> El {
     let picker = style_picker(p, k, style);
+    // Removed words in red on the original, added words on a green background in the rewrite.
+    let (removed, added) = match phase {
+        Phase::Ready(rewrite) => crate::diff::changed_words(original, rewrite),
+        _ => (Vec::new(), Vec::new()),
+    };
+    let removed: Vec<Span> = removed.into_iter().map(|r| Span::new(r.start, r.end).color(k.c.danger.fg)).collect();
+    let added: Vec<Span> =
+        added.into_iter().map(|r| Span::new(r.start, r.end).bg(k.c.success.bg, 1.0).color(k.c.success.fg)).collect();
     let (result, ready) = match phase {
         Phase::Loading => (loading(k, "Rewriting…"), false),
-        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, k.c.text_strong), true),
+        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added), true),
         Phase::Failed(error) => (message(k, "error", "Rewrite failed", error, k.c.danger.fg), false),
     };
     let mut notes = Vec::new();
@@ -231,7 +239,14 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         .min_h(0.0)
         .gap(8.0)
         .child(picker)
-        .child(text(original.to_string()).key("original").font(k.ty.text_small).color(k.c.text_muted).max_lines(2))
+        .child(
+            text(original.to_string())
+                .key("original")
+                .font(k.ty.text_small)
+                .color(k.c.text_muted)
+                .max_lines(2)
+                .spans(removed),
+        )
         .child(el().w_full().h(1.0).fill(k.c.border_weak))
         .child(result);
     for note in notes {
@@ -240,14 +255,14 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
     body.child(buttons(actions))
 }
 
-fn scrolling(k: &Kit, key: &str, value: &str, color: rune::Color) -> El {
+fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>) -> El {
     col()
         .key(key.to_string())
         .w_full()
         .grow(1.0)
         .min_h(0.0)
         .scroll(ScrollSpec { stick_bottom: false })
-        .child(text(value.to_string()).font(k.ty.ui).color(color).wrap().selectable(true))
+        .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
 fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {

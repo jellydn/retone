@@ -9,6 +9,7 @@ mod apply;
 #[cfg(target_os = "macos")]
 mod capture;
 mod config;
+mod diff;
 mod eval;
 mod flow;
 mod history_check;
