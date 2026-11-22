@@ -1,3 +1,14 @@
+## Retone 0.1.0-beta.8 — 2026-11-22
+
+- Fix: the selected text always wins. Retone reads the selection first (Accessibility, then ⌘C with the clipboard restored) and uses the clipboard only when nothing is selected. Clipboard text offers Copy only, never Replace.
+- If an app reports a selection that Retone cannot read, Retone now shows an error instead of rewriting unrelated clipboard text.
+- The popup says when it used the clipboard, and why: nothing was selected, or Accessibility is off.
+- Hint: if Retone keeps using the clipboard although text is selected, the Accessibility grant is stale after an update. The switch can show on but not work. Remove Retone in System Settings → Privacy & Security → Accessibility, add it again, then open Retone again.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.7 — 2026-11-22
 
 - Fix: in Settings, the window's close, minimize and zoom buttons no longer cover the first sidebar item. The sidebar now starts below them.
