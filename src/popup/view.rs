@@ -208,7 +208,9 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         notes.push(format!("Replace failed: {error}. Use Copy instead."));
     } else if ready && !can_replace {
         notes.push(if p.clipboard_only {
-            "Clipboard-only mode: grant Accessibility in Settings to use Replace.".to_string()
+            "Accessibility is off, so Retone used the clipboard, not the selection. Grant it in Settings.".to_string()
+        } else if p.from_clipboard {
+            "Nothing was selected, so Retone used the clipboard text. Only Copy is offered.".to_string()
         } else {
             "Retone cannot verify this field, so only Copy is offered.".to_string()
         });

@@ -5,7 +5,7 @@ fn effects(e: Effects<Effect>) -> Vec<Effect> {
 }
 
 fn captured(text: &str) -> Result<Captured, String> {
-    Ok(Captured { text: text.into(), secure_field: false, can_replace: true })
+    Ok(Captured { text: text.into(), secure_field: false, can_replace: true, from_clipboard: false })
 }
 
 /// Hotkey and capture with consent already given; returns the request's attempt.
@@ -103,7 +103,7 @@ fn escape_during_apply_waits_for_its_answer() {
 fn refusals_show_a_notice_and_send_nothing() {
     let cases = [
         (
-            Ok(Captured { text: "secret".into(), secure_field: true, can_replace: true }),
+            Ok(Captured { text: "secret".into(), secure_field: true, can_replace: true, from_clipboard: false }),
             Notice::Refused(Refusal::SecureField),
         ),
         (captured(" \n "), Notice::Refused(Refusal::NoText)),
@@ -142,7 +142,7 @@ fn no_request_starts_until_consent_is_given() {
 fn clipboard_only_capture_offers_copy_but_not_replace() {
     let mut flow = Flow::new(Style::Clear);
     let Effect::Capture(attempt) = effects(flow.step(Event::Hotkey { has_provider: true }))[0] else { panic!() };
-    let result = Ok(Captured { text: "text".into(), secure_field: false, can_replace: false });
+    let result = Ok(Captured { text: "text".into(), secure_field: false, can_replace: false, from_clipboard: false });
     let Effect::Request { attempt, .. } =
         effects(flow.step(Event::Captured { attempt, result, consented: true }))[0].clone()
     else {

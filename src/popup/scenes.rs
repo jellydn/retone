@@ -50,6 +50,10 @@ pub const SCENES: &[Scene] = &[
         p.clipboard_only = true;
         previewing(p, Phase::Ready(REWRITE.into()), false);
     }),
+    ("clipboard-no-selection", |p| {
+        p.from_clipboard = true;
+        previewing(p, Phase::Ready(REWRITE.into()), false);
+    }),
     ("replace-failed-example", |p| {
         previewing(p, Phase::Ready(REWRITE.into()), false);
         p.flow.apply_error = Some("the selection changed".into());

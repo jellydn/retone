@@ -30,6 +30,8 @@ pub struct Popup {
     pub provider_problem: Option<String>,
     /// Captured without Accessibility: the user copied the text, and Replace is off.
     pub clipboard_only: bool,
+    /// The last capture used the clipboard, because nothing was selected or Accessibility is off.
+    pub from_clipboard: bool,
     /// Set after the runtime guard saw a CLI write files; shown above the kept result.
     pub adapter_warning: Option<String>,
     /// The provider list, open over the current state (⌘P or a click on the header label).
@@ -76,6 +78,7 @@ impl Default for Popup {
             provider: None,
             provider_problem: None,
             clipboard_only: false,
+            from_clipboard: false,
             adapter_warning: None,
             picker: None,
             request: Latest::default(),
@@ -138,6 +141,7 @@ impl Popup {
         match reply {
             Reply::Captured { attempt, result, caret } => {
                 self.clipboard_only = !crate::capture::has_permissions();
+                self.from_clipboard = matches!(&result, Ok(captured) if captured.from_clipboard);
                 if let Some(links) = self.links.as_mut() {
                     // `show` checks the caret against the screens before trusting it.
                     links.anchor = caret;
