@@ -1,3 +1,12 @@
+## Retone 0.1.0-beta.7 — 2026-11-22
+
+- Fix: in Settings, the window's close, minimize and zoom buttons no longer cover the first sidebar item. The sidebar now starts below them.
+- The Retone logo and name now head the Settings sidebar.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.6 — 2026-11-21
 
 - New Settings design: a sidebar with General, Provider, Styles and Privacy. Each page is one card of rows with an icon, a short help line and the control on the right, with rarely used settings under **Advanced**. The sidebar footer shows **What's new**, the version, and how this copy updates.
