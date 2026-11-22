@@ -17,7 +17,7 @@ scripts/bundle.sh --release       # release bundle: Retone.app
 sh scripts/release.sh             # DMG, ZIP, SHA256SUMS in target/release/assets
 target/debug/retone --list-scenes # headless scenes for screenshots
 target/debug/retone --eval-styles --model qwen2.5:3b [--endpoint URL] # style prompt eval (prints sample text)
-sh scripts/cli-history-check.sh pi|opencode MODEL  # no-history gate for a CLI version (real Mac)
+sh scripts/cli-history-check.sh pi|opencode|claude|codex MODEL  # no-history gate for a CLI version (real Mac)
 target/debug/retone [--window settings] --scene NAME --snap out.png --theme dark
 ```
 
@@ -35,7 +35,7 @@ src/
 ├── strategy.rs    # per-app write strategy table (pure)
 ├── placement.rs   # popup position (caret, then pointer)
 ├── native.rs      # worker thread that owns the pasteboard and the AX element
-├── provider/      # local (HTTP/HTTPS, loopback or private network), cli runner, pi, opencode, consent
+├── provider/      # local (HTTP/HTTPS, loopback or private network), cli runner, pi, opencode, claude, codex, consent
 ├── popup/         # popup view and scenes
 ├── settings/      # Settings window
 ├── updates.rs     # update channel: Sparkle, Homebrew, or manual

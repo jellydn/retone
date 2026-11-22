@@ -1,5 +1,5 @@
 use super::*;
-use crate::provider::{Cancel, opencode, pi};
+use crate::provider::{Cancel, claude, codex, opencode, pi};
 use crate::styles::Style;
 use std::os::unix::fs::PermissionsExt;
 
@@ -79,6 +79,73 @@ fn opencode_keeps_its_data_in_memory_and_in_the_temp_folder() {
     assert!(var("OPENCODE_CONFIG").ends_with(&format!("{folder}/opencode.json")));
     assert!(env.contains("OPENCODE_CONFIG_PROJECT_DISABLE=1"));
     assert_eq!(stub.record("argv"), "run\n--standalone\n--model\nopencode/beam-free\n");
+}
+
+#[test]
+fn claude_code_runs_without_sessions_tools_or_hooks() {
+    let stub = Stub::new("2.1.66", "echo 'Done.'");
+    let out = claude::rewrite(
+        &["2.1.66"],
+        &stub.program,
+        "claude-haiku-5-5",
+        &Style::Clear,
+        SECRET,
+        &Cancel::default(),
+        &stub.home,
+    );
+    assert_eq!(out.answer, Ok("Done.".into()));
+    let argv: Vec<String> = stub.record("argv").lines().map(String::from).collect();
+    let after = |flag: &str| argv.iter().position(|a| a == flag).and_then(|i| argv.get(i + 1)).cloned();
+    assert!(argv.contains(&"--no-session-persistence".into()) && argv.contains(&"--strict-mcp-config".into()));
+    // An empty --tools list turns every tool off; a missing value would keep them all.
+    assert_eq!(after("--tools").as_deref(), Some(""));
+    assert_eq!(after("--setting-sources").as_deref(), Some("user"), "no project or local settings");
+    assert_eq!(after("--settings").as_deref(), Some(r#"{"disableAllHooks":true}"#));
+    assert_eq!(argv.last().map(String::as_str), Some("claude-haiku-5-5"));
+    assert!(stub.record("env").contains("CLAUDE_CODE_SKIP_PROMPT_HISTORY=1"));
+    assert!(!stub.record("argv").contains(SECRET) && stub.record("stdin").contains(SECRET));
+}
+
+#[test]
+fn codex_runs_ephemeral_read_only_with_memories_off_and_the_prompt_on_stdin() {
+    let stub = Stub::new("0.171.0", "echo 'Done.'");
+    let out = codex::rewrite(
+        &["0.171.0"],
+        &stub.program,
+        "gpt-6-luna",
+        &Style::Clear,
+        SECRET,
+        &Cancel::default(),
+        &stub.home,
+    );
+    assert_eq!(out.answer, Ok("Done.".into()));
+    let argv = stub.record("argv");
+    for flag in [
+        "exec\n",
+        "--ephemeral\n",
+        "--ignore-user-config\n",
+        "--sandbox\nread-only\n",
+        "--disable\nmemories\n",
+        "--disable\nshell_tool\n",
+    ] {
+        assert!(argv.contains(flag), "{flag:?} missing: {argv}");
+    }
+    // `-` (read stdin) must be the last argument, after the model.
+    assert!(argv.ends_with("--model\ngpt-6-luna\n-\n"), "{argv}");
+    assert!(!argv.contains(SECRET) && stub.record("stdin").contains(SECRET));
+}
+
+#[test]
+fn an_adapter_with_no_verified_version_refuses_every_version() {
+    let stub = Stub::new("2.1.66", "echo never");
+    let out = claude::rewrite(&[], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    assert_eq!(
+        out.answer,
+        Err("Claude Code 2.1.66 is not verified for no-history use. No Claude Code version is verified yet. \
+             Choose another provider or keep a verified version."
+            .into())
+    );
+    assert_eq!(stub.record("stdin"), "", "the stub never got the text");
 }
 
 #[test]

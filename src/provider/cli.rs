@@ -1,4 +1,4 @@
-//! Shared runner for the CLI adapters (Pi, OpenCode).
+//! Shared runner for the CLI adapters (Pi, OpenCode, Claude Code, Codex).
 //!
 //! Each request: a private `0700` temp folder as the working directory (deleted afterwards), the
 //! prompt on stdin (argv shows in `ps`), only verified CLI versions, a deadline, cancel that kills
@@ -83,8 +83,12 @@ pub fn execute(run: Run, workdir: &WorkDir, text: &str, cancel: &Cancel, home: &
 
 fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cancel) -> Result<String, String> {
     let version_args = vec![OsString::from("--version")];
-    let not_verified =
-        |found: &str| t!("cli.not_verified", name = run.name, found = found, verified = run.verified.join(", "));
+    let supported = if run.verified.is_empty() {
+        t!("cli.none_verified", name = run.name)
+    } else {
+        t!("cli.supported", name = run.name, verified = run.verified.join(", "))
+    };
+    let not_verified = |found: &str| t!("cli.not_verified", name = run.name, found = found, supported = supported);
     let version = match spawn_and_wait(run, workdir, &version_args, "", cancel, VERSION_DEADLINE, usize::MAX) {
         Ok(output) => parse_version(&output).ok_or_else(|| not_verified(t!("cli.unknown_version")))?,
         Err(Failure::Cancelled) => return Err(t!("provider.cancelled").into()),

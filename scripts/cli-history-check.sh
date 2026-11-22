@@ -1,10 +1,12 @@
 #!/bin/sh
-# Release gate for the CLI providers: proves that the installed Pi or OpenCode version writes no
+# Release gate for the CLI providers: proves that the installed CLI version writes no
 # history when Retone runs it. Run it on a real Mac before each release and whenever a supported
 # CLI version changes. Add a version to VERIFIED in src/provider/<cli>.rs only after it passes.
 #
 #   sh scripts/cli-history-check.sh pi ollama/qwen2.5:3b [runs]
 #   sh scripts/cli-history-check.sh opencode opencode/<model>-free [runs]
+#   sh scripts/cli-history-check.sh claude claude-haiku-5-5 [runs]
+#   sh scripts/cli-history-check.sh codex <model> [runs]
 #
 # It records the path, size, modification time and SHA-256 of every file under the CLI's data folders,
 # runs the rewrites through Retone's own adapter code (`retone --cli-check`), records again, and
@@ -13,7 +15,7 @@
 set -eu
 
 usage() {
-	echo "usage: sh scripts/cli-history-check.sh pi|opencode MODEL [RUNS]" >&2
+	echo "usage: sh scripts/cli-history-check.sh pi|opencode|claude|codex MODEL [RUNS]" >&2
 	exit 2
 }
 
@@ -33,6 +35,15 @@ pi)
 opencode)
 	set -- "$HOME/.local/share/opencode" "$HOME/.local/state/opencode" "$HOME/.cache/opencode" "$HOME/.config/opencode"
 	source_file=src/provider/opencode.rs
+	;;
+claude)
+	# ~/.claude.json is a file; find and stat take it like a folder with one entry.
+	set -- "$HOME/.claude" "$HOME/.claude.json"
+	source_file=src/provider/claude.rs
+	;;
+codex)
+	set -- "${CODEX_HOME:-$HOME/.codex}"
+	source_file=src/provider/codex.rs
 	;;
 *) usage ;;
 esac

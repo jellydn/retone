@@ -1,12 +1,14 @@
 //! Providers: a local OpenAI-compatible endpoint (on this Mac, or on a private network after
-//! the user opts in), and the Pi and OpenCode CLIs.
+//! the user opts in), and the Pi, OpenCode, Claude Code and Codex CLIs.
 //!
 //! A closed list on purpose: Retone never guesses flags, switches tools or falls back to another
 //! provider. Every request is bounded (deadline, answer cap) and its errors are redacted.
 
 #![forbid(unsafe_code)]
 
+pub mod claude;
 pub mod cli;
+pub mod codex;
 pub mod consent;
 pub mod local;
 pub mod opencode;
@@ -29,7 +31,13 @@ pub enum Kind {
     Pi,
     #[serde(rename = "opencode")]
     OpenCode,
+    #[serde(rename = "claude")]
+    ClaudeCode,
+    Codex,
 }
+
+/// Every provider, in the order Settings and the popup list them.
+pub const KINDS: [Kind; 5] = [Kind::Local, Kind::Pi, Kind::OpenCode, Kind::ClaudeCode, Kind::Codex];
 
 impl Kind {
     pub fn name(self) -> &'static str {
@@ -37,6 +45,8 @@ impl Kind {
             Kind::Local => t!("provider.local"),
             Kind::Pi => "Pi",
             Kind::OpenCode => "OpenCode",
+            Kind::ClaudeCode => "Claude Code",
+            Kind::Codex => "Codex",
         }
     }
 
@@ -45,6 +55,8 @@ impl Kind {
             Kind::Local => "local",
             Kind::Pi => "pi",
             Kind::OpenCode => "opencode",
+            Kind::ClaudeCode => "claude",
+            Kind::Codex => "codex",
         }
     }
 }
@@ -55,6 +67,8 @@ pub enum Provider {
     Local { endpoint: String, model: String },
     Pi { model: String },
     OpenCode { model: String },
+    ClaudeCode { model: String },
+    Codex { model: String },
 }
 
 impl Provider {
@@ -63,12 +77,18 @@ impl Provider {
             Provider::Local { .. } => Kind::Local,
             Provider::Pi { .. } => Kind::Pi,
             Provider::OpenCode { .. } => Kind::OpenCode,
+            Provider::ClaudeCode { .. } => Kind::ClaudeCode,
+            Provider::Codex { .. } => Kind::Codex,
         }
     }
 
     pub fn model(&self) -> &str {
         match self {
-            Provider::Local { model, .. } | Provider::Pi { model } | Provider::OpenCode { model } => model,
+            Provider::Local { model, .. }
+            | Provider::Pi { model }
+            | Provider::OpenCode { model }
+            | Provider::ClaudeCode { model }
+            | Provider::Codex { model } => model,
         }
     }
 
@@ -89,6 +109,12 @@ impl Provider {
             Provider::OpenCode { model } => {
                 opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, style, text, cancel, &env.home)
             }
+            Provider::ClaudeCode { model } => {
+                claude::rewrite(claude::VERIFIED, &env.claude_program, model, style, text, cancel, &env.home)
+            }
+            Provider::Codex { model } => {
+                codex::rewrite(codex::VERIFIED, &env.codex_program, model, style, text, cancel, &env.home)
+            }
         }
     }
 }
@@ -99,6 +125,8 @@ pub struct Env {
     pub home: PathBuf,
     pub pi_program: PathBuf,
     pub opencode_program: PathBuf,
+    pub claude_program: PathBuf,
+    pub codex_program: PathBuf,
     /// The Local AI API key, read from the Keychain just before the request.
     pub local_api_key: Option<local::ApiKey>,
 }
@@ -107,7 +135,14 @@ impl Env {
     /// The user's home, with the CLIs found by name on `PATH` at run time.
     pub fn system() -> Option<Env> {
         let home = rune_core::env::var("HOME").map(PathBuf::from)?;
-        Some(Env { home, pi_program: "pi".into(), opencode_program: "opencode".into(), local_api_key: None })
+        Some(Env {
+            home,
+            pi_program: "pi".into(),
+            opencode_program: "opencode".into(),
+            claude_program: "claude".into(),
+            codex_program: "codex".into(),
+            local_api_key: None,
+        })
     }
 }
 

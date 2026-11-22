@@ -7,7 +7,7 @@ use super::icons::*;
 use super::rows::{card, help, page_title, setting, value_link};
 use super::{HotkeyTest, PAGES, Page, SettingsUi, SubPage};
 use crate::i18n::I18N;
-use crate::provider::{Kind, local, opencode, pi};
+use crate::provider::{KINDS, Kind, claude, codex, local, opencode, pi};
 use crate::styles::PRESETS;
 use crate::theme;
 use crate::updates::UpdateChannel;
@@ -380,56 +380,60 @@ fn model_field(
         .build(k)
 }
 
-fn pi_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
-    let note = t!("settings.provider.pi_note", verified = pi::VERIFIED.join(", "));
-    setting(
-        k,
-        key,
-        &TERMINAL,
-        title,
-        help(k, note),
-        model_field(k, &s.pi_model, "ollama/qwen2.5:7b", |s| &mut s.pi_model),
-    )
-}
-
-fn opencode_row(s: &SettingsUi, k: &Kit, key: &str, title: &str) -> El {
-    let note = t!("settings.provider.opencode_note", verified = opencode::VERIFIED.join(", "));
-    let field = model_field(k, &s.opencode_model, "opencode/beam-free", |s| &mut s.opencode_model);
-    setting(k, key, &TERMINAL, title, help(k, note), field)
+/// The model row of a CLI provider: how Retone runs it and which versions passed the history check.
+fn cli_row(s: &SettingsUi, k: &Kit, kind: Kind, title: &str) -> El {
+    type Field = fn(&mut SettingsUi) -> &mut rune::TextEdit;
+    let (how, verified, placeholder, edit, field): (&str, &[&str], &str, &rune::TextEdit, Field) = match kind {
+        Kind::Pi => {
+            (t!("settings.provider.pi_how"), pi::VERIFIED, "ollama/qwen2.5:7b", &s.pi_model, |s| &mut s.pi_model)
+        }
+        Kind::OpenCode => {
+            (t!("settings.provider.opencode_how"), opencode::VERIFIED, "opencode/beam-free", &s.opencode_model, |s| {
+                &mut s.opencode_model
+            })
+        }
+        Kind::ClaudeCode => {
+            (t!("settings.provider.claude_how"), claude::VERIFIED, "claude-haiku-5-5", &s.claude_model, |s| {
+                &mut s.claude_model
+            })
+        }
+        // Local has no CLI row; the caller never passes it.
+        Kind::Codex | Kind::Local => {
+            (t!("settings.provider.codex_how"), codex::VERIFIED, "gpt-6-luna", &s.codex_model, |s| &mut s.codex_model)
+        }
+    };
+    let checked = if verified.is_empty() {
+        t!("settings.provider.not_verified").to_string()
+    } else {
+        t!("settings.provider.verified", verified = verified.join(", "))
+    };
+    let input = model_field(k, edit, placeholder, field);
+    setting(k, &format!("{}-model", kind.key()), &TERMINAL, title, help(k, format!("{how} {checked}")), input)
 }
 
 fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
-    let choices = [None, Some(Kind::Local), Some(Kind::Pi), Some(Kind::OpenCode)];
+    let choices: Vec<Option<Kind>> = std::iter::once(None).chain(KINDS.map(Some)).collect();
+    let names: Vec<&str> = std::iter::once(t!("settings.provider.none")).chain(KINDS.map(Kind::name)).collect();
     let current = choices.iter().position(|c| *c == s.provider_choice);
-    let picker = dropdown(
-        s,
-        k,
-        layer,
-        "provider",
-        &[t!("settings.provider.none"), Kind::Local.name(), "Pi", "OpenCode"],
-        current,
-        move |s, i| s.choose_provider(choices[i]),
-    );
+    let picker = dropdown(s, k, layer, "provider", &names, current, move |s, i| s.choose_provider(choices[i]));
     let provider_help = match s.provider_choice {
         None => t!("settings.provider.help_none"),
         Some(Kind::Local) => t!("settings.provider.help_local"),
-        Some(Kind::Pi) | Some(Kind::OpenCode) => t!("settings.provider.help_cli"),
+        Some(_) => t!("settings.provider.help_cli"),
     };
     let mut rows =
         vec![setting(k, "provider", &PROVIDER, t!("settings.page.provider"), help(k, provider_help), picker)];
     match s.provider_choice {
         None => {}
         Some(Kind::Local) => rows.extend(local_rows(s, k)),
-        Some(Kind::Pi) => rows.push(pi_row(s, k, "pi-model", t!("settings.provider.model"))),
-        Some(Kind::OpenCode) => rows.push(opencode_row(s, k, "opencode-model", t!("settings.provider.model"))),
+        Some(kind) => rows.push(cli_row(s, k, kind, t!("settings.provider.model"))),
     }
-    let mut extra = Vec::new();
-    if s.provider_choice != Some(Kind::Pi) {
-        extra.push(pi_row(s, k, "pi-model", t!("settings.provider.pi_model")));
-    }
-    if s.provider_choice != Some(Kind::OpenCode) {
-        extra.push(opencode_row(s, k, "opencode-model", t!("settings.provider.opencode_model")));
-    }
+    // The other CLIs' models, under Advanced.
+    let extra = KINDS
+        .into_iter()
+        .filter(|kind| *kind != Kind::Local && Some(*kind) != s.provider_choice)
+        .map(|kind| cli_row(s, k, kind, &t!("settings.provider.cli_model", name = kind.name())))
+        .collect();
     let save = Button::new(t!("settings.save"))
         .variant(ButtonVariant::Contrast)
         .on_press(|s: &mut SettingsUi| s.save_provider())
