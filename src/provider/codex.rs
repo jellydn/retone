@@ -42,6 +42,12 @@ pub fn rewrite(
         return fail(error);
     }
     let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
+    // The child inherits CODEX_HOME and writes there; the same rule as the release gate's
+    // ${CODEX_HOME:-$HOME/.codex}.
+    let codex_home = rune_core::env::var("CODEX_HOME")
+        .filter(|dir| !dir.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| home.join(".codex"));
     let mut args: Vec<OsString> = [
         "exec",
         "--ephemeral",
@@ -68,8 +74,8 @@ pub fn rewrite(
         args,
         envs: vec![],
         // Sessions go to sessions/YYYY/MM/DD/, so this cheap guard sees only a new year folder;
-        // the release gate checks all of ~/.codex, and is the proof.
-        data_dirs: vec![home.join(".codex/sessions"), home.join(".codex/memories")],
+        // the release gate checks the whole Codex home, and is the proof.
+        data_dirs: vec![codex_home.join("sessions"), codex_home.join("memories")],
         stdin: styles::build_single(style, text),
     };
     cli::execute(run, &workdir, text, cancel, home)
