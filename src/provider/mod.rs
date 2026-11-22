@@ -72,12 +72,19 @@ impl Provider {
         }
     }
 
-    /// Runs one rewrite. Blocking: call it from a worker, never the frame loop.
-    pub fn rewrite(&self, style: &Style, text: &str, cancel: &Cancel, env: &Env) -> Outcome {
+    /// Runs one rewrite. Blocking: call it from a worker, never the frame loop. Only the local
+    /// provider streams; `on_partial` gets its text so far. CLI answers arrive whole.
+    pub fn rewrite(&self, style: &Style, text: &str, cancel: &Cancel, env: &Env, on_partial: &dyn Fn(&str)) -> Outcome {
         match self {
-            Provider::Local { endpoint, model } => {
-                Outcome::answer(local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text))
-            }
+            Provider::Local { endpoint, model } => Outcome::answer(local::rewrite(
+                endpoint,
+                model,
+                env.local_api_key.as_ref(),
+                style,
+                text,
+                cancel,
+                on_partial,
+            )),
             Provider::Pi { model } => pi::rewrite(pi::VERIFIED, &env.pi_program, model, style, text, cancel, &env.home),
             Provider::OpenCode { model } => {
                 opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, style, text, cancel, &env.home)

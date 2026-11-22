@@ -42,8 +42,17 @@ pub enum State {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Phase {
     Loading,
+    /// The answer so far, while the provider streams it. Replace and Copy wait for `Ready`.
+    Streaming(String),
     Ready(String),
     Failed(String),
+}
+
+impl Phase {
+    /// A request is still running: Esc, Retry or a style change must cancel it.
+    pub fn is_running(&self) -> bool {
+        matches!(self, Phase::Loading | Phase::Streaming(_))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,6 +84,11 @@ pub enum Event {
         consented: bool,
     },
     ConsentGiven,
+    /// Part of a streamed answer: all text so far.
+    Partial {
+        attempt: Attempt,
+        text: String,
+    },
     Answer {
         attempt: Attempt,
         result: Result<String, String>,
@@ -141,6 +155,13 @@ impl Flow {
                 effects.push(SaveConsent);
                 (state, effects)
             }
+            (
+                State::Previewing { attempt, original, style, phase, can_replace },
+                Event::Partial { attempt: a, text },
+            ) if attempt == a && phase.is_running() => {
+                let phase = Phase::Streaming(text);
+                (State::Previewing { attempt, original, style, phase, can_replace }, Effects::none())
+            }
             (State::Previewing { attempt, original, style, can_replace, .. }, Event::Answer { attempt: a, result })
                 if attempt == a =>
             {
@@ -165,7 +186,7 @@ impl Flow {
             }
             // Nothing is sent to a provider and model without its own consent.
             (State::Previewing { original, style, phase, .. }, Event::ProviderChanged { consented: false }) => {
-                let effects = if phase == Phase::Loading { Effects::one(CancelRequest) } else { Effects::none() };
+                let effects = if phase.is_running() { Effects::one(CancelRequest) } else { Effects::none() };
                 (State::AwaitingConsent { original, style }, effects)
             }
             (State::AwaitingConsent { original, style }, Event::ProviderChanged { consented: true }) => {
@@ -197,7 +218,7 @@ impl Flow {
                 let phase = Phase::Ready(rewrite);
                 (State::Previewing { attempt, original, style, phase, can_replace: false }, Effects::none())
             }
-            (State::Previewing { phase: Phase::Loading, .. }, Event::Cancel) => {
+            (State::Previewing { phase, .. }, Event::Cancel) if phase.is_running() => {
                 (State::Idle, Effects::two(CancelRequest, ClosePopup))
             }
             // Applying is short and already posted ⌘V; Esc then waits for its answer.
@@ -245,7 +266,7 @@ impl Flow {
 
 /// A Retry or style change during loading replaces the running request instead of queuing one.
 fn with_cancel_if_loading(phase: &Phase, effects: Effects<Effect>) -> Effects<Effect> {
-    if *phase != Phase::Loading {
+    if !phase.is_running() {
         return effects;
     }
     let mut all = Effects::one(Effect::CancelRequest);

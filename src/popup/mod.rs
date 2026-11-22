@@ -16,7 +16,7 @@ use crate::shared::Shared;
 use crate::styles::Style;
 use rune::machine::{Attempt, Effects};
 use rune::{AppHandle, Key, KeyEvent, Latest, Tx};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Fixed size, so placement is exact before the first frame; long text scrolls inside.
 pub const SIZE: (f64, f64) = (440.0, 300.0);
@@ -43,6 +43,9 @@ pub struct Popup {
     links: Option<Links>,
     /// The last announcement, so a screen reader hears each change once.
     last_spoken: Option<String>,
+    /// The newest streamed text and its attempt, written by the request worker.
+    partial: Arc<Mutex<Option<(Attempt, String)>>>,
+    waker: Option<rune::Waker>,
 }
 
 pub struct Picker {
@@ -88,6 +91,8 @@ impl Default for Popup {
             cancel: Cancel::default(),
             links: None,
             last_spoken: None,
+            partial: Arc::default(),
+            waker: None,
         }
     }
 }
@@ -107,7 +112,8 @@ impl Popup {
 
     pub fn set_waker(&mut self, waker: rune::Waker) {
         self.request.set_waker(waker.clone());
-        self.local_models.set_waker(waker);
+        self.local_models.set_waker(waker.clone());
+        self.waker = Some(waker);
     }
 
     /// The user's global shortcut, or the menu item Rewrite Selection.
@@ -256,7 +262,12 @@ impl Popup {
             // An endpoint that cannot list models leaves the saved choices as they are.
             listed = self.add_local_models(&models.unwrap_or_default());
         }
-        let Some((attempt, outcome)) = self.request.take() else { return listed };
+        // Before the final answer, so a last partial never lands after it.
+        let partial = self.partial.lock().map(|mut slot| slot.take()).unwrap_or_default();
+        if let Some((attempt, text)) = &partial {
+            self.step(Event::Partial { attempt: *attempt, text: text.clone() }, tx);
+        }
+        let Some((attempt, outcome)) = self.request.take() else { return listed || partial.is_some() };
         if let (Some(folder), Some(provider), Some(links)) = (&outcome.wrote_files, &self.provider, &self.links) {
             let home = links.env.as_ref().map(|env| env.home.display().to_string()).unwrap_or_default();
             let folder = folder.display().to_string().replacen(&home, "~", 1);
@@ -311,14 +322,23 @@ impl Popup {
         };
         let cancel = self.cancel.clone();
         let shared = self.links.as_ref().map(|links| links.shared.clone());
+        let (partial, waker) = (self.partial.clone(), self.waker.clone());
         self.request.request(
-            (attempt, provider, style, text, cancel, env, shared),
-            |(attempt, provider, style, text, cancel, mut env, shared)| {
+            (attempt, provider, style, text, cancel, env, shared, partial, waker),
+            |(attempt, provider, style, text, cancel, mut env, shared, partial, waker)| {
                 // In the worker: the Keychain read can show a prompt.
                 if provider.kind() == provider::Kind::Local {
                     env.local_api_key = shared.and_then(|shared| shared.api_key()).map(provider::local::ApiKey);
                 }
-                (attempt, provider.rewrite(&style, &text, &cancel, &env))
+                let on_partial = |so_far: &str| {
+                    if let Ok(mut slot) = partial.lock() {
+                        *slot = Some((attempt, so_far.to_string()));
+                    }
+                    if let Some(wake) = &waker {
+                        wake();
+                    }
+                };
+                (attempt, provider.rewrite(&style, &text, &cancel, &env, &on_partial))
             },
         );
     }
