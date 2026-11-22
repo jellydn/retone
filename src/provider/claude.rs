@@ -13,7 +13,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 /// Versions that passed `scripts/cli-history-check.sh`. Add one only after the check passes.
-pub const VERIFIED: &[&str] = &[];
+pub const VERIFIED: &[&str] = &["2.1.66"];
 
 /// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
 pub fn rewrite(
