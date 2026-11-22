@@ -10,6 +10,7 @@ mod rows;
 pub mod view;
 
 use crate::config::Config;
+use crate::i18n::Key;
 use crate::popup::Popup;
 use crate::provider::{Kind, consent, local};
 use crate::shared::Shared;
@@ -28,8 +29,12 @@ pub enum Page {
     Privacy,
 }
 
-pub const PAGES: [(Page, &str); 4] =
-    [(Page::General, "General"), (Page::Provider, "Provider"), (Page::Styles, "Styles"), (Page::Privacy, "Privacy")];
+pub const PAGES: [(Page, Key); 4] = [
+    (Page::General, key!("settings.page.general")),
+    (Page::Provider, key!("settings.page.provider")),
+    (Page::Styles, key!("settings.page.styles")),
+    (Page::Privacy, key!("settings.page.privacy")),
+];
 
 /// A page under a row with ›: only fields too long for a row get one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,13 +227,13 @@ impl SettingsUi {
         if let Some(chord) = next {
             let name = chord.to_string();
             if !["ctrl+", "alt+", "super+"].iter().any(|m| name.contains(m)) {
-                return Err(ShortcutError::InvalidAccelerator("Use ⌘, ⌃ or ⌥ in the shortcut.".into()));
+                return Err(ShortcutError::InvalidAccelerator(t!("settings.shortcut.needs_modifier").into()));
             }
             if POPUP_CHORDS.contains(&name.as_str()) {
-                return Err(ShortcutError::InvalidAccelerator("The popup uses this shortcut.".into()));
+                return Err(ShortcutError::InvalidAccelerator(t!("settings.shortcut.popup_uses").into()));
             }
             if let Some(owner) = self.retone_owner(&name, slot) {
-                return Err(ShortcutError::InvalidAccelerator(format!("Retone uses this shortcut for {owner}.")));
+                return Err(ShortcutError::InvalidAccelerator(t!("settings.shortcut.retone_uses", owner = owner)));
             }
         }
         let result = self.register(slot, next);
@@ -252,12 +257,12 @@ impl SettingsUi {
     /// The other Retone shortcut that already uses `chord`, named for the error message.
     fn retone_owner(&self, chord: &str, slot: Slot) -> Option<String> {
         if slot != Slot::Main && self.config.hotkey.as_deref() == Some(chord) {
-            return Some("Rewrite selection".into());
+            return Some(t!("settings.shortcut.main_name").into());
         }
         let names = view::style_names();
         self.config.style_hotkeys.iter().enumerate().find_map(|(index, saved)| {
             (slot != Slot::Style(index) && saved.as_deref() == Some(chord))
-                .then(|| format!("the {} style", names.get(index).copied().unwrap_or("Custom")))
+                .then(|| t!("settings.shortcut.style_name", name = names.get(index).copied().unwrap_or("Custom")))
         })
     }
 
@@ -319,8 +324,10 @@ impl SettingsUi {
         next.pi_model = self.pi_model.text.trim().to_string();
         next.opencode_model = self.opencode_model.text.trim().to_string();
         let checked = match next.provider {
-            None => Ok("No provider: the shortcut shows \"Choose a provider\".".to_string()),
-            Some(_) => next.provider().map(|p| format!("Saved: {} · {}", p.kind().name(), p.model())),
+            None => Ok(t!("settings.provider.saved_none").to_string()),
+            Some(_) => {
+                next.provider().map(|p| t!("settings.provider.saved", provider = p.kind().name(), model = p.model()))
+            }
         };
         let new_key = self.api_key.text.trim().to_string();
         let checked = checked.and_then(|saved| {
@@ -352,7 +359,7 @@ impl SettingsUi {
     }
 
     pub fn remove_api_key(&mut self) {
-        let result = self.shared.set_api_key(None).map(|()| "API key removed from the Keychain.".to_string());
+        let result = self.shared.set_api_key(None).map(|()| t!("settings.provider.key_removed").to_string());
         if result.is_ok() {
             self.api_key_saved = false;
         }
@@ -393,8 +400,8 @@ impl SettingsUi {
     pub fn revoke_consent(&mut self) {
         let result = consent::revoke_all(&mut self.shared.prefs());
         self.privacy_status = Some(match result {
-            Ok(()) => "Retone will ask again before the next rewrite with each provider.".into(),
-            Err(error) => format!("Could not save: {error}"),
+            Ok(()) => t!("settings.privacy.revoked").into(),
+            Err(error) => t!("settings.privacy.save_failed", error = error),
         });
     }
 

@@ -15,10 +15,10 @@ pub enum UpdateChannel {
 impl UpdateChannel {
     pub fn summary(self) -> &'static str {
         match self {
-            UpdateChannel::Sparkle => "Retone checks for updates automatically and asks before it installs one.",
-            UpdateChannel::Homebrew => "Homebrew installed Retone. Update it with: brew upgrade --cask retone",
+            UpdateChannel::Sparkle => t!("updates.sparkle"),
+            UpdateChannel::Homebrew => t!("updates.homebrew"),
             UpdateChannel::Manual => {
-                "This build has no automatic updates. Download new versions from github.com/jellydn/retone/releases."
+                t!("updates.manual")
             }
         }
     }

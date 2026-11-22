@@ -4,6 +4,9 @@
 //! app stays active and keeps its selection) and Settings. Headless renders (`--snap`,
 //! `--scene`) build both windows with in-memory prefs and start no native work.
 
+// First, so `t!` is in scope in every module after it.
+#[macro_use]
+mod i18n;
 #[cfg(target_os = "macos")]
 mod apply;
 #[cfg(target_os = "macos")]
@@ -40,6 +43,10 @@ fn main() {
         std::process::exit(code);
     }
     let headless = rune::is_headless();
+    // Headless renders stay in English, so snapshots do not depend on the Mac's language.
+    if !headless {
+        i18n::use_system_language();
+    }
     let shared = Arc::new(Shared::new(!headless));
 
     let popup_spec = AppSpec::<Popup> {

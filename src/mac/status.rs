@@ -107,13 +107,13 @@ pub fn install(popup: AppHandle<Popup>, settings: AppHandle<SettingsUi>, channel
     }
     let menu = NSMenu::new(mtm);
     let entries: [(&str, Option<Sel>); 7] = [
-        ("Rewrite Selection", Some(sel!(rewrite:))),
+        (t!("menu.rewrite"), Some(sel!(rewrite:))),
         ("", None),
-        ("Settings…", Some(sel!(settings:))),
-        ("Permissions…", Some(sel!(permissions:))),
-        ("Check for Updates…", Some(sel!(updates:))),
+        (t!("menu.settings"), Some(sel!(settings:))),
+        (t!("menu.permissions"), Some(sel!(permissions:))),
+        (t!("menu.check_updates"), Some(sel!(updates:))),
         ("", None),
-        ("Quit Retone", Some(sel!(quit:))),
+        (t!("menu.quit"), Some(sel!(quit:))),
     ];
     for (title, action) in entries {
         let Some(action) = action else {
