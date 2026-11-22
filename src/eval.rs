@@ -91,7 +91,7 @@ fn run(args: &[String]) -> Result<bool, String> {
         let answers: Vec<(Style, String)> = PRESETS
             .iter()
             .map(|style| {
-                let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env);
+                let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env, &|_| {});
                 (style.clone(), answer.unwrap_or_else(|error| format!("ERROR: {error}")))
             })
             .collect();

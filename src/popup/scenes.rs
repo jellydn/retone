@@ -37,6 +37,7 @@ pub const SCENES: &[Scene] = &[
         previewing(p, Phase::Ready(REWRITE.into()), true);
     }),
     ("loading-example", |p| previewing(p, Phase::Loading, true)),
+    ("streaming-example", |p| previewing(p, Phase::Streaming("Hi team, the meeting has moved to Tue".into()), true)),
     ("error-example", |p| previewing(p, Phase::Failed("No answer within 60 s.".into()), true)),
     ("too-long-example", |p| {
         with_provider(p);

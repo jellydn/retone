@@ -8,9 +8,10 @@
 //! An optional API key (llama-server `--api-key`) is sent as a Bearer token; it lives in the
 //! Keychain, never in prefs. Retone stores no text (the server may log on its side).
 
-use super::{DEADLINE, answer_cap};
+use super::{Cancel, DEADLINE, answer_cap};
 use crate::styles::{self, Style};
 use serde_json::{Value, json};
+use std::io::{BufRead, BufReader};
 use std::net::IpAddr;
 use ureq::config::Config;
 use ureq::http::Uri;
@@ -184,14 +185,24 @@ pub fn list_models(endpoint: &str, allow_network: bool, key: Option<&ApiKey>) ->
     Ok(models.iter().filter_map(|model| model["id"].as_str().map(str::to_string)).collect())
 }
 
-pub fn rewrite(endpoint: &str, model: &str, key: Option<&ApiKey>, style: &Style, text: &str) -> Result<String, String> {
+/// One rewrite, streamed: `on_partial` gets all text so far after each chunk, and a cancel stops
+/// reading at the next chunk. A server that ignores `stream` and sends one JSON answer still works.
+pub fn rewrite(
+    endpoint: &str,
+    model: &str,
+    key: Option<&ApiKey>,
+    style: &Style,
+    text: &str,
+    cancel: &Cancel,
+    on_partial: &dyn Fn(&str),
+) -> Result<String, String> {
     // The opt-in was checked when the provider was built from the saved settings; this check
     // still refuses public addresses, and the resolver checks the addresses themselves.
     let endpoint = validate_endpoint(endpoint, true)?;
     let prompt = styles::build(style, text);
     let body = json!({
         "model": model,
-        "stream": false,
+        "stream": true,
         "temperature": 0.2,
         "messages": messages(&prompt),
     });
@@ -201,14 +212,49 @@ pub fn rewrite(endpoint: &str, model: &str, key: Option<&ApiKey>, style: &Style,
     }
     let mut response = request.send_json(&body).map_err(|e| unreachable_message(&e))?;
     let status = response.status();
-    let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
-    if !status.is_success() {
-        return Err(status_message(status, &body));
+    let streamed = response.body().mime_type() == Some("text/event-stream");
+    if !status.is_success() || !streamed {
+        let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
+        if !status.is_success() {
+            return Err(status_message(status, &body));
+        }
+        let answer = body["choices"][0]["message"]["content"].as_str().ok_or_else(bad_answer)?;
+        return finish(answer, text);
     }
-    let answer = body["choices"][0]["message"]["content"].as_str().ok_or_else(bad_answer)?;
+    let reader = BufReader::new(response.body_mut().with_config().limit(BODY_LIMIT).reader());
+    let mut answer = String::new();
+    for line in reader.lines() {
+        if cancel.is_cancelled() {
+            return Err("Cancelled.".into());
+        }
+        let line = line.map_err(|_| "The local server stopped answering.".to_string())?;
+        // Other lines are SSE comments, event names or blank separators.
+        let Some(data) = line.strip_prefix("data:").map(str::trim) else { continue };
+        if data == "[DONE]" {
+            break;
+        }
+        let chunk: Value = serde_json::from_str(data).map_err(|_| bad_answer())?;
+        if chunk.get("error").is_some() {
+            return Err(status_message(status, &chunk));
+        }
+        if let Some(delta) = chunk["choices"][0]["delta"]["content"].as_str() {
+            answer.push_str(delta);
+            // Stop a runaway model early instead of after the whole answer arrived.
+            if answer.chars().count() > answer_cap(text) {
+                return Err(TOO_LONG.into());
+            }
+            on_partial(&answer);
+        }
+    }
+    finish(&answer, text)
+}
+
+const TOO_LONG: &str = "The model's answer was far longer than the text, so Retone dropped it.";
+
+fn finish(answer: &str, text: &str) -> Result<String, String> {
     let answer = styles::clean_answer(answer);
     if answer.chars().count() > answer_cap(text) {
-        return Err("The model's answer was far longer than the text, so Retone dropped it.".into());
+        return Err(TOO_LONG.into());
     }
     Ok(answer)
 }

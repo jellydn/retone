@@ -211,3 +211,29 @@ fn after_a_failed_replace_no_later_rewrite_offers_replace() {
         assert!(effects(flow.step(Event::Replace)).is_empty(), "Replace must stay off after a failed apply");
     }
 }
+
+#[test]
+fn a_streaming_preview_offers_no_replace_or_copy_until_the_answer_ends() {
+    let mut flow = Flow::new(Style::Clear);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Partial { attempt, text: "Te".into() });
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Streaming(t), .. } if t == "Te"));
+    assert!(!applies(&effects(flow.step(Event::Replace))));
+    assert!(!applies(&effects(flow.step(Event::Copy))));
+    // A partial from an older request is ignored.
+    flow.step(Event::Partial { attempt: Attempt(attempt.0 + 99), text: "stale".into() });
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Streaming(t), .. } if t == "Te"));
+    flow.step(Event::Answer { attempt, result: Ok("Text.".into()) });
+    // A late partial after the answer does not take the preview back to streaming.
+    flow.step(Event::Partial { attempt, text: "Te".into() });
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Ready(t), .. } if t == "Text."));
+
+    let mut flow = Flow::new(Style::Clear);
+    let running = start(&mut flow, "x");
+    flow.step(Event::Partial { attempt: running, text: "X".into() });
+    assert_eq!(
+        effects(flow.step(Event::Cancel)),
+        vec![Effect::CancelRequest, Effect::ClosePopup],
+        "Esc stops the stream"
+    );
+}

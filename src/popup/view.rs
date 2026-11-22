@@ -31,7 +31,8 @@ pub fn spoken(p: &Popup) -> Option<(String, LiveRegion)> {
             Some((format!("{title}. {body}"), Assertive))
         }
         State::AwaitingConsent { .. } => Some((p.provider.as_ref().map(consent::question).unwrap_or_default(), Polite)),
-        State::Previewing { phase: Phase::Loading, .. } => Some(("Rewriting.".into(), Polite)),
+        // The same words while streaming, so each new token is not announced again.
+        State::Previewing { phase: Phase::Loading | Phase::Streaming(_), .. } => Some(("Rewriting.".into(), Polite)),
         State::Previewing { phase: Phase::Failed(error), .. } => Some((format!("Rewrite failed. {error}"), Assertive)),
         State::Previewing { phase: Phase::Ready(_), can_replace, .. } => {
             let keys =
@@ -251,7 +252,8 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         added.into_iter().map(|r| Span::new(r.start, r.end).bg(k.c.success.bg, 1.0).color(k.c.success.fg)).collect();
     let (result, ready) = match phase {
         Phase::Loading => (loading(k, "Rewriting…"), false),
-        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added).label("Rewrite"), true),
+        Phase::Streaming(so_far) => (scrolling(k, "rewrite", so_far, Vec::new(), true).label("Rewrite so far"), false),
+        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added, false).label("Rewrite"), true),
         Phase::Failed(error) => (message(k, "error", "Rewrite failed", error, k.c.danger.fg), false),
     };
     let mut notes = Vec::new();
@@ -265,6 +267,9 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         } else {
             "Retone cannot replace text in this app or field, so only Copy is offered.".to_string()
         });
+    }
+    if matches!(phase, Phase::Streaming(_)) {
+        notes.push("Still writing… Copy and Replace turn on when the answer is complete.".to_string());
     }
     if let Some(warning) = &p.adapter_warning {
         notes.push(warning.clone());
@@ -299,13 +304,14 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
     body.child(buttons(actions))
 }
 
-fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>) -> El {
+/// `follow` keeps the end in view while a streamed answer grows.
+fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) -> El {
     col()
         .key(key.to_string())
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .scroll(ScrollSpec { stick_bottom: false })
+        .scroll(ScrollSpec { stick_bottom: follow })
         .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
@@ -347,6 +353,11 @@ mod tests {
         let (words, how) = spoken(&previewing(Phase::Failed("No answer within 60 s.".into()), true)).expect("spoken");
         assert_eq!((words.as_str(), how), ("Rewrite failed. No answer within 60 s.", LiveRegion::Assertive));
         assert_eq!(spoken(&previewing(Phase::Loading, true)), Some(("Rewriting.".into(), LiveRegion::Polite)));
+        // Streaming says the same words, so a screen reader does not hear every new token.
+        assert_eq!(
+            spoken(&previewing(Phase::Streaming("Te".into()), true)),
+            Some(("Rewriting.".into(), LiveRegion::Polite))
+        );
         assert_eq!(spoken(&Popup::default()), None, "nothing while idle");
 
         let mut too_long = Popup::default();
