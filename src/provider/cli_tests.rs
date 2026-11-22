@@ -136,6 +136,24 @@ fn codex_runs_ephemeral_read_only_with_memories_off_and_the_prompt_on_stdin() {
 }
 
 #[test]
+fn codex_runs_with_a_private_home_that_has_only_the_login() {
+    let stub = Stub::new("0.171.0", "echo state > \"$CODEX_HOME/state_5.sqlite\"; ls \"$CODEX_HOME\"");
+    let user_home = stub.home.join(".codex");
+    std::fs::create_dir_all(&user_home).expect("codex home");
+    std::fs::write(user_home.join("auth.json"), "{}").expect("auth");
+    std::fs::write(user_home.join("config.toml"), "model = \"x\"").expect("config");
+    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    // The child saw only the login copy (and wrote its state) in the private home.
+    assert_eq!(out.answer, Ok("auth.json\nstate_5.sqlite".into()));
+    assert_eq!(out.wrote_files, None, "the user's Codex home is unchanged");
+    let env = stub.record("env");
+    let private = env.lines().find_map(|l| l.strip_prefix("CODEX_HOME=")).expect("CODEX_HOME").to_string();
+    assert!(env.contains(&format!("CODEX_SQLITE_HOME={private}")), "{env}");
+    assert!(!std::path::Path::new(&private).exists(), "the private home is deleted after the run");
+    assert!(!user_home.join("state_5.sqlite").exists());
+}
+
+#[test]
 fn an_adapter_with_no_verified_version_refuses_every_version() {
     let stub = Stub::new("2.1.66", "echo never");
     let out = claude::rewrite(&[], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
@@ -199,7 +217,7 @@ fn a_codex_session_in_an_existing_day_folder_is_reported() {
     let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &home);
     assert_eq!(out.answer, Ok("ok".into()));
     // Reported as the data folder that holds the change.
-    assert_eq!(out.wrote_files, Some(home.join(".codex/sessions")));
+    assert_eq!(out.wrote_files, Some(home.join(".codex")));
 }
 
 #[test]
