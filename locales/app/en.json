@@ -19,6 +19,7 @@
   "capture.own_window": "Select text in another app, then press your shortcut.",
   "capture.secure_input": "Another app has secure keyboard input on, so Retone cannot copy the selection.",
   "capture.unreadable": "Retone could not read the selected text. Try again, or copy it with ⌘C first.",
+  "claude.relative_config_dir": "CLAUDE_CONFIG_DIR must be an absolute path, so Retone did not run Claude Code.",
   "cli.failed": "{{name}} failed: {{error}}",
   "cli.no_text": "{{name}} returned no text.",
   "cli.none_verified": "No {{name}} version is verified yet.",

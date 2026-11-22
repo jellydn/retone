@@ -39,6 +39,13 @@ opencode)
 claude)
 	# CLAUDE_CONFIG_DIR moves the config folder (and its .claude.json) when set. ~/.claude.json is a
 	# file; find and stat take it like a folder with one entry.
+	case ${CLAUDE_CONFIG_DIR:-} in
+	'' | /*) ;;
+	*)
+		echo "FAIL: CLAUDE_CONFIG_DIR must be an absolute path (it is '$CLAUDE_CONFIG_DIR')." >&2
+		exit 1
+		;;
+	esac
 	set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "$HOME/.claude.json"
 	source_file=src/provider/claude.rs
 	;;

@@ -29,6 +29,10 @@ pub fn rewrite(
     if let Err(error) = cli::check_model("Claude Code", model) {
         return fail(error);
     }
+    let config = match config_dir(rune_core::env::var("CLAUDE_CONFIG_DIR"), home) {
+        Ok(config) => config,
+        Err(error) => return fail(error),
+    };
     let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
     let args = [
         "-p",
@@ -54,17 +58,34 @@ pub fn rewrite(
         envs: vec![("CLAUDE_CODE_SKIP_PROMPT_HISTORY", "1".into()), ("DISABLE_AUTOUPDATER", "1".into())],
         // Sessions go to projects/<folder>/; a new folder there changes its time. The release
         // gate checks all of the config folder and ~/.claude.json.
-        data_dirs: vec![config_dir(home).join("projects")],
+        data_dirs: vec![config.join("projects")],
         stdin: styles::build_single(style, text),
     };
     cli::execute(run, &workdir, text, cancel, home)
 }
 
-/// Where Claude Code keeps its settings and sessions: `CLAUDE_CONFIG_DIR`, else `~/.claude`. The
-/// child inherits the variable; the release gate uses the same rule.
-fn config_dir(home: &Path) -> PathBuf {
-    rune_core::env::var("CLAUDE_CONFIG_DIR")
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".claude"))
+/// Where Claude Code keeps its settings and sessions: `CLAUDE_CONFIG_DIR` (from `var`), else
+/// `~/.claude`. A relative value is refused: Claude runs in another folder than Retone and the
+/// release gate, so each would resolve it to a different place.
+fn config_dir(var: Option<String>, home: &Path) -> Result<PathBuf, String> {
+    match var.filter(|dir| !dir.is_empty()).map(PathBuf::from) {
+        None => Ok(home.join(".claude")),
+        Some(dir) if dir.is_absolute() => Ok(dir),
+        Some(_) => Err(t!("claude.relative_config_dir").into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_config_dir_follows_the_variable_and_refuses_a_relative_one() {
+        let home = Path::new("/Users/me");
+        assert_eq!(config_dir(None, home), Ok(home.join(".claude")));
+        assert_eq!(config_dir(Some(String::new()), home), Ok(home.join(".claude")));
+        assert_eq!(config_dir(Some("/w/claude".into()), home), Ok(PathBuf::from("/w/claude")));
+        assert!(config_dir(Some("claude-work".into()), home).is_err());
+        assert!(config_dir(Some("~/claude".into()), home).is_err());
+    }
 }

@@ -192,6 +192,8 @@ fn a_codex_session_in_an_existing_day_folder_is_reported() {
     let dir = WorkDir::new().expect("dir");
     let day = dir.path().join("home/.codex/sessions/2026/11/22");
     std::fs::create_dir_all(&day).expect("day");
+    // A later month folder too, so a guard that watches only the newest one misses the change.
+    std::fs::create_dir_all(dir.path().join("home/.codex/sessions/2026/12/01")).expect("later");
     let stub = Stub::new("0.171.0", &format!("echo s > '{}/rollout.jsonl'; echo ok", day.display()));
     let home = dir.path().join("home");
     let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &home);

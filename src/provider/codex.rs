@@ -73,28 +73,28 @@ pub fn rewrite(
         verified,
         args,
         envs: vec![],
-        // Sessions go to sessions/YYYY/MM/DD/. The guard reads one level below each folder, so
-        // the newest year, month and day folders are watched too; the release gate checks the
-        // whole Codex home, and is the proof.
+        // Sessions go to sessions/YYYY/MM/DD/, so every date folder is watched too; the release
+        // gate checks the whole Codex home, and is the proof.
         data_dirs: [codex_home.join("sessions"), codex_home.join("memories")]
             .into_iter()
-            .chain(newest_session_folders(&codex_home.join("sessions")))
+            .chain(session_folders(&codex_home.join("sessions")))
             .collect(),
         stdin: styles::build_single(style, text),
     };
     cli::execute(run, &workdir, text, cancel, home)
 }
 
-/// The newest `YYYY`, `YYYY/MM` and `YYYY/MM/DD` folders under `sessions`: today's, when it exists.
-/// A new file in an existing day folder changes only that folder.
-fn newest_session_folders(sessions: &Path) -> Vec<PathBuf> {
-    let mut folders: Vec<PathBuf> = Vec::new();
+/// Every `YYYY`, `YYYY/MM` and `YYYY/MM/DD` folder under `sessions`. The guard reads one level below
+/// each folder, so a new file in an existing day folder shows only if that folder is watched.
+fn session_folders(sessions: &Path) -> Vec<PathBuf> {
+    let subfolders = |dir: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()
+    };
+    let mut level = vec![sessions.to_path_buf()];
+    let mut all = Vec::new();
     for _ in 0..3 {
-        let dir = folders.last().map_or(sessions, PathBuf::as_path);
-        let newest =
-            std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).max();
-        let Some(newest) = newest else { break };
-        folders.push(newest);
+        level = level.iter().flat_map(|dir| subfolders(dir)).collect();
+        all.extend(level.iter().cloned());
     }
-    folders
+    all
 }
