@@ -16,21 +16,19 @@ pub enum Refusal {
 impl Refusal {
     pub fn title(&self) -> &'static str {
         match self {
-            Refusal::NoText => "No text selected",
-            Refusal::TooLong { .. } => "Selection too long",
-            Refusal::SecureField => "Password field",
+            Refusal::NoText => t!("input.no_text"),
+            Refusal::TooLong { .. } => t!("input.too_long"),
+            Refusal::SecureField => t!("input.secure_field"),
         }
     }
 
     pub fn message(&self) -> String {
         match self {
-            Refusal::NoText => "Select some text, then press your shortcut again.".into(),
-            Refusal::TooLong { chars } => format!(
-                "{} characters. Retone rewrites up to {} at a time. Select a shorter part and try again.",
-                group_thousands(*chars),
-                group_thousands(INPUT_LIMIT)
-            ),
-            Refusal::SecureField => "Retone does not read or change password fields.".into(),
+            Refusal::NoText => t!("input.no_text_help").into(),
+            Refusal::TooLong { chars } => {
+                t!("input.too_long_help", chars = group_thousands(*chars), limit = group_thousands(INPUT_LIMIT))
+            }
+            Refusal::SecureField => t!("input.secure_field_help").into(),
         }
     }
 }

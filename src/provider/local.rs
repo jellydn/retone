@@ -26,7 +26,6 @@ pub const LM_STUDIO: &str = "http://127.0.0.1:1234/v1";
 pub const LLAMA_CPP: &str = "http://127.0.0.1:8080/v1";
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
-const NOT_PRIVATE: &str = "Retone accepts only addresses on this Mac or on a private network (LAN or Tailscale), so it did not send the text.";
 
 /// The API key for one request. Debug never prints it, so it cannot end up in a log line.
 #[derive(Clone, PartialEq, Eq)]
@@ -52,12 +51,12 @@ enum Host {
 /// brackets). Err for anything Retone does not send to.
 fn authority(url: &str) -> Result<(&str, &str), String> {
     let Some(rest) = url.strip_prefix("http://").or_else(|| url.strip_prefix("https://")) else {
-        return Err("Use an http:// or https:// address, such as http://127.0.0.1:11434/v1.".into());
+        return Err(t!("local.scheme").into());
     };
     let authority = rest.split('/').next().unwrap_or_default();
     // `http://127.0.0.1@example.com` would send the text to example.com.
     if authority.contains('@') {
-        return Err("The address must not contain a user name.".into());
+        return Err(t!("local.user_name").into());
     }
     // IPv6 hosts are bracketed: `[::1]:8080`.
     let (host, port) = match authority.strip_prefix('[') {
@@ -75,7 +74,7 @@ fn authority(url: &str) -> Result<(&str, &str), String> {
         && !host.starts_with(['-', '.'])
         && host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'));
     if !port_ok || !name_ok {
-        return Err("This address is not valid.".into());
+        return Err(t!("local.invalid").into());
     }
     Ok((authority, host))
 }
@@ -119,13 +118,9 @@ pub fn validate_endpoint(url: &str, allow_network: bool) -> Result<String, Strin
     let (_, host) = authority(url)?;
     match classify(host) {
         Host::Loopback => Ok(url.to_string()),
-        Host::Public => {
-            Err("Retone accepts only addresses on this Mac or on a private network (LAN or Tailscale).".into())
-        }
+        Host::Public => Err(t!("local.public").into()),
         Host::Private | Host::Name if allow_network => Ok(url.to_string()),
-        Host::Private | Host::Name => {
-            Err("Turn on \"Allow LAN and Tailscale servers\" to use an address outside this Mac.".into())
-        }
+        Host::Private | Host::Name => Err(t!("local.needs_network").into()),
     }
 }
 
@@ -149,7 +144,7 @@ impl Resolver for PrivateOnly {
         if addrs.iter().all(|addr| allowed(addr.ip(), self.loopback_only)) {
             Ok(addrs)
         } else {
-            Err(ureq::Error::Other(NOT_PRIVATE.into()))
+            Err(ureq::Error::Other(t!("local.not_private").into()))
         }
     }
 }
@@ -225,9 +220,9 @@ pub fn rewrite(
     let mut answer = String::new();
     for line in reader.lines() {
         if cancel.is_cancelled() {
-            return Err("Cancelled.".into());
+            return Err(t!("provider.cancelled").into());
         }
-        let line = line.map_err(|_| "The local server stopped answering.".to_string())?;
+        let line = line.map_err(|_| t!("local.stopped").to_string())?;
         // Other lines are SSE comments, event names or blank separators.
         let Some(data) = line.strip_prefix("data:").map(str::trim) else { continue };
         if data == "[DONE]" {
@@ -241,7 +236,7 @@ pub fn rewrite(
             answer.push_str(delta);
             // Stop a runaway model early instead of after the whole answer arrived.
             if answer.chars().count() > answer_cap(text) {
-                return Err(TOO_LONG.into());
+                return Err(t!("provider.too_long").into());
             }
             on_partial(&answer);
         }
@@ -249,12 +244,10 @@ pub fn rewrite(
     finish(&answer, text)
 }
 
-const TOO_LONG: &str = "The model's answer was far longer than the text, so Retone dropped it.";
-
 fn finish(answer: &str, text: &str) -> Result<String, String> {
     let answer = styles::clean_answer(answer);
     if answer.chars().count() > answer_cap(text) {
-        return Err(TOO_LONG.into());
+        return Err(t!("provider.too_long").into());
     }
     Ok(answer)
 }
@@ -275,11 +268,10 @@ fn messages(prompt: &styles::Prompt) -> Value {
 /// while it starts); it never echoes the text for these errors, and the caller redacts it anyway.
 fn status_message(status: ureq::http::StatusCode, body: &Value) -> String {
     if status.as_u16() == 401 {
-        return "The server needs an API key (llama-server --api-key), or the key is wrong. Set it in Settings → Provider."
-            .into();
+        return t!("local.unauthorized").into();
     }
-    let detail = body["error"]["message"].as_str().or(body["error"].as_str()).unwrap_or("no details");
-    format!("The server answered {status}: {detail}")
+    let detail = body["error"]["message"].as_str().or(body["error"].as_str()).unwrap_or(t!("provider.no_details"));
+    t!("local.status", status = status, detail = detail)
 }
 
 /// A model ID for display: llama-server reports the GGUF file path, so only its file name is
@@ -293,20 +285,18 @@ pub fn short_model_name(model: &str) -> &str {
 
 fn unreachable_message(error: &ureq::Error) -> String {
     match error {
-        ureq::Error::Timeout(_) => format!("No answer within {} s.", DEADLINE.as_secs()),
+        ureq::Error::Timeout(_) => t!("provider.timeout", seconds = DEADLINE.as_secs()),
         ureq::Error::ConnectionFailed | ureq::Error::Io(_) | ureq::Error::HostNotFound => {
-            "Cannot reach the local server. Is Ollama, LM Studio or llama-server running?".into()
+            t!("local.unreachable").into()
         }
-        ureq::Error::Other(_) => NOT_PRIVATE.into(),
-        ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => {
-            "The secure connection failed. Check the server's certificate, or use http:// on Tailscale.".into()
-        }
-        _ => "The request to the local server failed.".into(),
+        ureq::Error::Other(_) => t!("local.not_private").into(),
+        ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => t!("local.tls").into(),
+        _ => t!("local.failed").into(),
     }
 }
 
 fn bad_answer() -> String {
-    "The local server sent an answer Retone does not understand.".into()
+    t!("local.bad_answer").into()
 }
 
 #[cfg(test)]

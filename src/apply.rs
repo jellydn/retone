@@ -24,21 +24,21 @@ pub fn replace(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), St
 
 fn write_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), String> {
     let (Some(pid), Some(target)) = (capture.pid, capture.target.as_ref()) else {
-        return Err("Retone cannot check where the text came from".into());
+        return Err(t!("apply.no_target").into());
     };
     if let Err(reason) = target.still_matches(&capture.captured.text) {
         spike!("replace check failed: {reason}");
-        return Err("the selection changed".into());
+        return Err(t!("apply.selection_changed").into());
     }
     if target.is_secure() {
-        return Err("the field is a password field".into());
+        return Err(t!("apply.secure_field").into());
     }
     match capture.strategy {
-        Strategy::CopyOnly => Err("this app is Copy only".into()),
+        Strategy::CopyOnly => Err(t!("apply.copy_only").into()),
         Strategy::AxSet => {
             if screens::frontmost_pid() != Some(pid) {
                 spike!("replace check failed: frontmost pid changed");
-                return Err("the selection changed".into());
+                return Err(t!("apply.selection_changed").into());
             }
             target.set_selected_text(rewrite).map_err(String::from)
         }
@@ -50,14 +50,14 @@ fn write_over(capture: &Capture, rewrite: &str, board: &Board) -> Result<(), Str
 /// A slower app pastes the restored clipboard instead; the strategy table tunes it per app.
 fn paste_over(pid: i32, rewrite: &str, board: &Board, settle: Duration) -> Result<(), String> {
     if events::secure_input_on() {
-        return Err("another app has secure keyboard input on".into());
+        return Err(t!("apply.secure_input").into());
     }
     let snapshot = board.snapshot();
     if !snapshot.complete {
-        return Err("the clipboard holds data Retone cannot restore".into());
+        return Err(t!("apply.clipboard").into());
     }
     if !events::wait_for_modifier_release() {
-        return Err("a modifier key is held down".into());
+        return Err(t!("apply.modifiers").into());
     }
     let written = board.write_transient_text(rewrite);
     // Last check before ⌘V, so an app switch during the AX re-check or the modifier wait is
@@ -65,11 +65,11 @@ fn paste_over(pid: i32, rewrite: &str, board: &Board, settle: Duration) -> Resul
     if screens::frontmost_pid() != Some(pid) {
         board.restore_if_unchanged(&snapshot, written);
         spike!("replace check failed: frontmost pid changed");
-        return Err("the selection changed".into());
+        return Err(t!("apply.selection_changed").into());
     }
     if !events::post_paste(pid) {
         board.restore_if_unchanged(&snapshot, written);
-        return Err("Retone could not send ⌘V".into());
+        return Err(t!("apply.paste_failed").into());
     }
     sleep(settle);
     // Skipped when the user copied something new meanwhile: never overwrite a newer copy.

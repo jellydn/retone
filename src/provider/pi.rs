@@ -24,7 +24,7 @@ pub fn rewrite(
     if let Err(error) = cli::check_model("Pi", model) {
         return fail(error);
     }
-    let Ok(workdir) = WorkDir::new() else { return fail("Retone could not create its temp folder.".into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
     let args = [
         "-p",
         "--no-session",

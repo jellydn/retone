@@ -40,16 +40,17 @@ pub fn question(provider: &Provider) -> String {
     if let Provider::Local { endpoint, model } = provider
         && let Some(host) = local::network_host(endpoint)
     {
-        let mut text =
-            format!("Send the selected text to Local AI on {host} / {model}? It leaves this Mac over your network.");
+        let mut text = t!("consent.network", provider = Kind::Local.name(), host = host, model = model);
         if endpoint.starts_with("http://") {
-            text.push_str(" Plain http is not encrypted: use Tailscale or https on a shared network.");
+            text.push(' ');
+            text.push_str(t!("consent.plain_http"));
         }
         return text;
     }
-    let mut text = format!("Send the selected text to {} / {}?", provider.kind().name(), provider.model());
+    let mut text = t!("consent.question", provider = provider.kind().name(), model = provider.model());
     if provider.kind() == Kind::OpenCode && opencode::is_free_model(provider.model()) {
-        text.push_str(" Free models can have different privacy terms and limits.");
+        text.push(' ');
+        text.push_str(t!("consent.free_model"));
     }
     text
 }
@@ -61,10 +62,7 @@ pub fn disabled_reason(prefs: &Prefs, kind: Kind) -> Option<String> {
 
 /// Called when the runtime guard saw the CLI write files. Nothing is deleted.
 pub fn disable(prefs: &mut Prefs, kind: Kind, folder: &str) -> Result<String, String> {
-    let reason = format!(
-        "{} saved files during this rewrite, so Retone turned it off. Nothing was deleted. Files may be in {folder}.",
-        kind.name()
-    );
+    let reason = t!("consent.disabled", provider = kind.name(), folder = folder);
     let mut map: BTreeMap<String, String> = prefs.get(DISABLED).unwrap_or_default();
     map.insert(kind.key().into(), reason.clone());
     prefs.set(DISABLED, &map).map_err(|e| e.to_string())?;

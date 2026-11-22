@@ -167,7 +167,7 @@ impl Flow {
             {
                 let phase = match result {
                     Ok(text) if !text.trim().is_empty() => Phase::Ready(text),
-                    Ok(_) => Phase::Failed("The model returned no text.".into()),
+                    Ok(_) => Phase::Failed(t!("flow.no_text").into()),
                     Err(error) => Phase::Failed(error),
                 };
                 (State::Previewing { attempt, original, style, phase, can_replace }, Effects::none())

@@ -261,8 +261,9 @@ impl SettingsUi {
         }
         let names = view::style_names();
         self.config.style_hotkeys.iter().enumerate().find_map(|(index, saved)| {
-            (slot != Slot::Style(index) && saved.as_deref() == Some(chord))
-                .then(|| t!("settings.shortcut.style_name", name = names.get(index).copied().unwrap_or("Custom")))
+            (slot != Slot::Style(index) && saved.as_deref() == Some(chord)).then(|| {
+                t!("settings.shortcut.style_name", name = names.get(index).copied().unwrap_or(t!("style.custom")))
+            })
         })
     }
 

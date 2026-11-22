@@ -43,7 +43,7 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
     // The hotkey can fire while Retone's own Settings window is in front (recording, testing);
     // reading or pasting into Retone itself makes no sense.
     if pid == Some(std::process::id() as i32) {
-        return Err("Select text in another app, then press your shortcut.".into());
+        return Err(t!("capture.own_window").into());
     }
     let target = ax::Target::focused();
     let bundle_id = screens::frontmost_bundle_id();
@@ -67,7 +67,7 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
             text
         }
         None => {
-            let copied = copy_selection(board, pid.ok_or("No app is in front.")?);
+            let copied = copy_selection(board, pid.ok_or(t!("capture.no_app"))?);
             match &copied {
                 Ok(text) => {
                     spike!("capture path=cmd-c chars={} newlines={}", text.chars().count(), text.matches('\n').count())
@@ -102,7 +102,7 @@ fn selection_or_clipboard(
         return Ok((selection, false));
     }
     if range_selected {
-        return Err("Retone could not read the selected text. Try again, or copy it with ⌘C first.".into());
+        return Err(t!("capture.unreadable").into());
     }
     Ok((clipboard().unwrap_or_default(), true))
 }
@@ -111,20 +111,18 @@ fn selection_or_clipboard(
 /// An empty string means the app copied nothing (no selection); the clipboard is then unchanged.
 fn copy_selection(board: &Board, pid: i32) -> Result<String, String> {
     if events::secure_input_on() {
-        return Err("Another app has secure keyboard input on, so Retone cannot copy the selection.".into());
+        return Err(t!("capture.secure_input").into());
     }
     if !events::wait_for_modifier_release() {
-        return Err("Release the shortcut keys, then try again.".into());
+        return Err(t!("capture.modifiers").into());
     }
     let snapshot = board.snapshot();
     if !snapshot.complete {
         // Restoring part of the clipboard would lose data; let the user copy instead.
-        return Err(
-            "The clipboard holds data Retone cannot restore. Copy the text with ⌘C, then press your shortcut.".into()
-        );
+        return Err(t!("capture.clipboard").into());
     }
     if !events::post_copy(pid) {
-        return Err("Retone could not send ⌘C.".into());
+        return Err(t!("capture.copy_failed").into());
     }
     let start = rune_core::time::now();
     while board.change_count() == snapshot.change_count {

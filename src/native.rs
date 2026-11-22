@@ -57,7 +57,7 @@ impl Native {
                     Command::Replace { attempt, text } => {
                         let result = match current.as_ref() {
                             Some(capture) => apply::replace(capture, &text, &board),
-                            None => Err("nothing was captured".into()),
+                            None => Err(t!("apply.nothing_captured").into()),
                         };
                         on_reply(Reply::Applied { attempt, result });
                     }
