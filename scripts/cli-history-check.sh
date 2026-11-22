@@ -79,11 +79,11 @@ snapshot() {
 	for dir in "$@"; do
 		if [ -e "$dir" ]; then
 			{
-				find "$dir" ! -type d -exec stat -f '%m %z %N' {} +
-				find "$dir" -type f -exec shasum -a 256 {} +
-				find "$dir" -type d -exec stat -f 'folder %N' {} +
+				find -H "$dir" ! -type d -exec stat -f '%m %z %N' {} +
+				find -H "$dir" -type f -exec shasum -a 256 {} +
+				find -H "$dir" -type d -exec stat -f 'folder %N' {} +
 			} >>"$out.raw"
-			find "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
+			find -H "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
 		else
 			# [ -e ] is also false when a parent folder cannot be read. Only "No such file or
 			# directory" means missing; any other error stops the check, because both snapshots
