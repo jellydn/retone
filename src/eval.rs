@@ -58,7 +58,7 @@ pub fn run_from_args() -> Option<i32> {
     })
 }
 
-fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+pub fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     args.iter().position(|arg| arg == name).and_then(|i| args.get(i + 1)).map(String::as_str)
 }
 

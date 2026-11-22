@@ -36,7 +36,16 @@ pub fn is_free_model(model: &str) -> bool {
     model.starts_with("opencode/") && model.ends_with("-free")
 }
 
-pub fn rewrite(program: &Path, model: &str, style: &Style, text: &str, cancel: &Cancel, home: &Path) -> Outcome {
+/// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+pub fn rewrite(
+    verified: &[&str],
+    program: &Path,
+    model: &str,
+    style: &Style,
+    text: &str,
+    cancel: &Cancel,
+    home: &Path,
+) -> Outcome {
     let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("OpenCode", model) {
         return fail(error);
@@ -69,14 +78,7 @@ pub fn rewrite(program: &Path, model: &str, style: &Style, text: &str, cancel: &
         .iter()
         .map(|dir| home.join(dir))
         .collect();
-    let run = Run {
-        name: "OpenCode",
-        program,
-        verified: VERIFIED,
-        args,
-        envs,
-        data_dirs,
-        stdin: styles::build_single(style, text),
-    };
+    let run =
+        Run { name: "OpenCode", program, verified, args, envs, data_dirs, stdin: styles::build_single(style, text) };
     cli::execute(run, &workdir, text, cancel, home)
 }

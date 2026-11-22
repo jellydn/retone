@@ -56,7 +56,7 @@ pub struct Run<'a> {
     /// Shown in messages: "Pi", "OpenCode".
     pub name: &'static str,
     pub program: &'a Path,
-    pub verified: &'static [&'static str],
+    pub verified: &'a [&'a str],
     pub args: Vec<OsString>,
     pub envs: Vec<(&'static str, OsString)>,
     pub data_dirs: Vec<PathBuf>,
@@ -116,6 +116,25 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
         Err(Failure::Exited(stderr)) => Err(format!("{} failed: {}", run.name, last_error_line(&stderr))),
         Err(Failure::Spawn) => Err(format!("Cannot run {}. Is it installed and on your PATH?", run.name)),
     }
+}
+
+/// The installed version, asked with `HOME` set to a temp folder and the usual deadline. For
+/// `retone --cli-check`, whose probe must not touch the real data folders (OpenCode logs even
+/// `--version` under `~/.local/share`).
+pub fn installed_version(program: &Path) -> Option<String> {
+    let workdir = WorkDir::new().ok()?;
+    let run = Run {
+        name: "",
+        program,
+        verified: &[],
+        args: vec![],
+        envs: vec![("HOME", workdir.path().as_os_str().to_owned())],
+        data_dirs: vec![],
+        stdin: String::new(),
+    };
+    let args = [OsString::from("--version")];
+    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), VERSION_DEADLINE, usize::MAX).ok()?;
+    parse_version(&output)
 }
 
 enum Failure {

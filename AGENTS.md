@@ -17,6 +17,7 @@ scripts/bundle.sh --release       # release bundle: Retone.app
 sh scripts/release.sh             # DMG, ZIP, SHA256SUMS in target/release/assets
 target/debug/retone --list-scenes # headless scenes for screenshots
 target/debug/retone --eval-styles --model qwen2.5:3b [--endpoint URL] # style prompt eval (prints sample text)
+sh scripts/cli-history-check.sh pi|opencode MODEL  # no-history gate for a CLI version (real Mac)
 target/debug/retone [--window settings] --scene NAME --snap out.png --theme dark
 ```
 
