@@ -20,9 +20,9 @@ pub const ALL: [Theme; 4] = [Theme::System, Theme::Dark, Theme::Light, Theme::Ka
 impl Theme {
     pub fn name(self) -> &'static str {
         match self {
-            Theme::System => "System",
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
+            Theme::System => t!("theme.system"),
+            Theme::Dark => t!("theme.dark"),
+            Theme::Light => t!("theme.light"),
             Theme::KanagawaLotus => "Kanagawa Lotus",
         }
     }

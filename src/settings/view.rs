@@ -230,7 +230,7 @@ fn status_line(k: &Kit, result: &Result<String, String>) -> El {
 
 pub fn style_names() -> Vec<&'static str> {
     let mut names: Vec<&str> = PRESETS.iter().map(|style| style.name()).collect();
-    names.push("Custom");
+    names.push(t!("style.custom"));
     names
 }
 
@@ -406,7 +406,7 @@ fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         k,
         layer,
         "provider",
-        &[t!("settings.provider.none"), "Local AI", "Pi", "OpenCode"],
+        &[t!("settings.provider.none"), Kind::Local.name(), "Pi", "OpenCode"],
         current,
         move |s, i| s.choose_provider(choices[i]),
     );

@@ -90,10 +90,10 @@ impl Config {
     /// missing, for the popup's "Choose a provider" notice.
     pub fn provider(&self) -> Result<Provider, String> {
         match self.provider {
-            None => Err("Choose a provider in Settings.".into()),
+            None => Err(t!("popup.no_provider_body").into()),
             Some(Kind::Local) => {
                 let endpoint = local::validate_endpoint(&self.local_endpoint, self.local_allow_network)?;
-                let model = exact_model(&self.local_model, "Local AI")?;
+                let model = exact_model(&self.local_model, Kind::Local.name())?;
                 Ok(Provider::Local { endpoint, model })
             }
             Some(Kind::Pi) => {
@@ -146,7 +146,7 @@ impl Config {
 fn exact_model(model: &str, name: &str) -> Result<String, String> {
     let model = model.trim();
     if model.is_empty() {
-        return Err(format!("Choose an exact {name} model ID in Settings."));
+        return Err(t!("provider.exact_model", name = name));
     }
     Ok(model.to_string())
 }

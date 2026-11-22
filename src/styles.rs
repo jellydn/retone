@@ -17,11 +17,11 @@ pub const PRESETS: [Style; 4] = [Style::Clear, Style::Concise, Style::Profession
 impl Style {
     pub fn name(&self) -> &str {
         match self {
-            Style::Clear => "Clear",
-            Style::Concise => "Concise",
-            Style::Professional => "Professional",
-            Style::Technical => "Technical",
-            Style::Custom(_) => "Custom",
+            Style::Clear => t!("style.clear"),
+            Style::Concise => t!("style.concise"),
+            Style::Professional => t!("style.professional"),
+            Style::Technical => t!("style.technical"),
+            Style::Custom(_) => t!("style.custom"),
         }
     }
 

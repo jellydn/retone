@@ -66,7 +66,7 @@ pub struct Run<'a> {
 /// Refuses model IDs that could be read as a flag or hide another argument.
 pub fn check_model(name: &str, model: &str) -> Result<(), String> {
     if model.is_empty() || model.starts_with('-') || model.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(format!("Choose an exact {name} model ID in Settings."));
+        return Err(t!("provider.exact_model", name = name));
     }
     Ok(())
 }
@@ -83,18 +83,12 @@ pub fn execute(run: Run, workdir: &WorkDir, text: &str, cancel: &Cancel, home: &
 
 fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cancel) -> Result<String, String> {
     let version_args = vec![OsString::from("--version")];
-    let not_verified = |found: &str| {
-        format!(
-            "{} {found} is not verified for no-history use. Retone supports {} {}. Choose another provider or keep a verified version.",
-            run.name,
-            run.name,
-            run.verified.join(", ")
-        )
-    };
+    let not_verified =
+        |found: &str| t!("cli.not_verified", name = run.name, found = found, verified = run.verified.join(", "));
     let version = match spawn_and_wait(run, workdir, &version_args, "", cancel, VERSION_DEADLINE, usize::MAX) {
-        Ok(output) => parse_version(&output).ok_or_else(|| not_verified("(unknown version)"))?,
-        Err(Failure::Cancelled) => return Err("Cancelled.".into()),
-        Err(_) => return Err(format!("Cannot run {}. Is it installed and on your PATH?", run.name)),
+        Ok(output) => parse_version(&output).ok_or_else(|| not_verified(t!("cli.unknown_version")))?,
+        Err(Failure::Cancelled) => return Err(t!("provider.cancelled").into()),
+        Err(_) => return Err(t!("cli.not_found", name = run.name)),
     };
     if !run.verified.contains(&version.as_str()) {
         return Err(not_verified(&version));
@@ -104,17 +98,17 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
         Ok(output) => {
             let answer = styles::clean_answer(&strip_ansi(&output));
             if answer.is_empty() {
-                Err(format!("{} returned no text.", run.name))
+                Err(t!("cli.no_text", name = run.name))
             } else if answer.chars().count() > answer_cap(text) {
-                Err("The model's answer was far longer than the text, so Retone dropped it.".into())
+                Err(t!("provider.too_long").into())
             } else {
                 Ok(answer)
             }
         }
-        Err(Failure::Cancelled) => Err("Cancelled.".into()),
-        Err(Failure::TimedOut) => Err(format!("No answer within {} s.", DEADLINE.as_secs())),
-        Err(Failure::Exited(stderr)) => Err(format!("{} failed: {}", run.name, last_error_line(&stderr))),
-        Err(Failure::Spawn) => Err(format!("Cannot run {}. Is it installed and on your PATH?", run.name)),
+        Err(Failure::Cancelled) => Err(t!("provider.cancelled").into()),
+        Err(Failure::TimedOut) => Err(t!("provider.timeout", seconds = DEADLINE.as_secs())),
+        Err(Failure::Exited(stderr)) => Err(t!("cli.failed", name = run.name, error = last_error_line(&stderr))),
+        Err(Failure::Spawn) => Err(t!("cli.not_found", name = run.name)),
     }
 }
 
@@ -253,7 +247,7 @@ fn last_error_line(stderr: &str) -> String {
     let clean = strip_ansi(stderr);
     let lines: Vec<&str> = clean.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
     let line = lines.iter().rev().find(|line| line.to_ascii_lowercase().contains("error")).or(lines.last());
-    line.map_or("no details".into(), |line| line.trim_start_matches("Error:").trim().to_string())
+    line.map_or(t!("provider.no_details").into(), |line| line.trim_start_matches("Error:").trim().to_string())
 }
 
 type Snapshot = BTreeMap<PathBuf, Option<(u64, SystemTime)>>;

@@ -16,13 +16,13 @@ pub fn local_api_key() -> Option<String> {
 }
 
 pub fn set_local_api_key(key: &str) -> Result<(), String> {
-    set_generic_password(APP_ID, ACCOUNT, key.as_bytes()).map_err(|e| format!("Keychain: {e}"))
+    set_generic_password(APP_ID, ACCOUNT, key.as_bytes()).map_err(|e| t!("keychain.error", error = e))
 }
 
 pub fn remove_local_api_key() -> Result<(), String> {
     match delete_generic_password(APP_ID, ACCOUNT) {
         // errSecItemNotFound: nothing to remove is not an error.
-        Err(e) if e.code() != -25300 => Err(format!("Keychain: {e}")),
+        Err(e) if e.code() != -25300 => Err(t!("keychain.error", error = e)),
         _ => Ok(()),
     }
 }

@@ -34,7 +34,7 @@ pub enum Kind {
 impl Kind {
     pub fn name(self) -> &'static str {
         match self {
-            Kind::Local => "Local AI",
+            Kind::Local => t!("provider.local"),
             Kind::Pi => "Pi",
             Kind::OpenCode => "OpenCode",
         }
@@ -150,7 +150,7 @@ pub fn answer_cap(input: &str) -> usize {
 pub fn redact(error: &str, selected: &str, home: Option<&str>) -> String {
     let mut text = error.trim().to_string();
     if selected.trim().chars().count() >= 4 {
-        text = text.replace(selected.trim(), "[selected text]");
+        text = text.replace(selected.trim(), t!("provider.redacted"));
     }
     if let Some(home) = home.filter(|home| home.len() > 1) {
         text = text.replace(home, "~");

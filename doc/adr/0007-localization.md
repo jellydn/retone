@@ -17,7 +17,9 @@ All UI text was English literals in the view code. To add languages, the text mu
 - Code reads a message with `t!("key")`, or `t!("key", name = value)` for `{{name}}` placeholders. A key name that is not in the catalog stops the build.
 - A real run uses the system's preferred languages. Headless renders (`--snap`, `--scene`) stay in English, so snapshots do not depend on the Mac's language.
 - Not translated: the model prompts and the style rules (the model gets English instructions in every locale), product names (Retone, Ollama, Pi, OpenCode), key symbols and shell commands.
-- First step: English only, with no change to the UI. The error and notice texts from capture, apply, the providers and the input checks, and the style and theme names, move in a later step. Languages come after that.
+- English first, with no change to the UI: step 1 moved the view text, step 2 the error and notice texts from capture, apply, the providers and the input checks, plus the style, theme and Local AI names. Languages come after that.
+- Diagnostics stay English: `spike!` lines and the AX re-check reasons, which only reach that log.
+- The reason a CLI provider was turned off is saved in prefs as a sentence, so it stays in the language of the moment it was saved.
 
 ## Consequences
 

@@ -50,11 +50,11 @@ pub fn rewrite(
     if let Err(error) = cli::check_model("OpenCode", model) {
         return fail(error);
     }
-    let Ok(workdir) = WorkDir::new() else { return fail("Retone could not create its temp folder.".into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
     let config = workdir.path().join("opencode.json");
     let data = workdir.path().join("data");
     if std::fs::write(&config, CONFIG).is_err() || std::fs::create_dir_all(data.join("opencode")).is_err() {
-        return fail("Retone could not prepare OpenCode's private config.".into());
+        return fail(t!("opencode.config_failed").into());
     }
     // Moving the data folder also hides OpenCode's login file; a copy in the temp folder keeps
     // connected providers working and is deleted with the folder.
