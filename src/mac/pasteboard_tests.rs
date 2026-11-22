@@ -1,4 +1,14 @@
 use super::*;
+use std::sync::{Mutex, MutexGuard};
+
+/// Pasteboard tests run one at a time. In parallel, two `pasteboardWithUniqueName` boards on
+/// different threads sometimes saw each other's items. The app uses the pasteboard from one
+/// worker thread only, so serial tests match it.
+fn serial() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    // A failed test poisons the lock; the next test still runs.
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 fn mixed_snapshot() -> Snapshot {
     // Text, RTF, PNG-like bytes and a file URL in two items, as a Finder copy plus text would give.
@@ -25,6 +35,7 @@ fn without_change_count(mut snapshot: Snapshot) -> Snapshot {
 
 #[test]
 fn restore_gives_back_every_item_type_and_byte() {
+    let _serial = serial();
     let board = Board::unique();
     let original = mixed_snapshot();
     board.restore(&original);
@@ -33,6 +44,7 @@ fn restore_gives_back_every_item_type_and_byte() {
 
 #[test]
 fn restore_is_skipped_when_someone_copied_after_retone() {
+    let _serial = serial();
     let board = Board::unique();
     let original = mixed_snapshot();
     board.restore(&original);
@@ -45,6 +57,7 @@ fn restore_is_skipped_when_someone_copied_after_retone() {
 
 #[test]
 fn restore_runs_when_only_retone_wrote() {
+    let _serial = serial();
     let board = Board::unique();
     let original = mixed_snapshot();
     board.restore(&original);
@@ -56,6 +69,7 @@ fn restore_runs_when_only_retone_wrote() {
 
 #[test]
 fn transient_text_carries_the_clipboard_manager_markers() {
+    let _serial = serial();
     let board = Board::unique();
     board.write_transient_text("rewrite");
     let types: Vec<String> = board.snapshot().items[0].iter().map(|(kind, _)| kind.clone()).collect();
@@ -65,6 +79,7 @@ fn transient_text_carries_the_clipboard_manager_markers() {
 
 #[test]
 fn an_empty_pasteboard_restores_to_empty() {
+    let _serial = serial();
     let board = Board::unique();
     let empty = board.snapshot();
     board.write_transient_text("rewrite");
