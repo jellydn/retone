@@ -118,6 +118,25 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
     }
 }
 
+/// The installed version, asked with `HOME` set to a temp folder and the usual deadline. For
+/// `retone --cli-check`, whose probe must not touch the real data folders (OpenCode logs even
+/// `--version` under `~/.local/share`).
+pub fn installed_version(program: &Path) -> Option<String> {
+    let workdir = WorkDir::new().ok()?;
+    let run = Run {
+        name: "",
+        program,
+        verified: &[],
+        args: vec![],
+        envs: vec![("HOME", workdir.path().as_os_str().to_owned())],
+        data_dirs: vec![],
+        stdin: String::new(),
+    };
+    let args = [OsString::from("--version")];
+    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), VERSION_DEADLINE, usize::MAX).ok()?;
+    parse_version(&output)
+}
+
 enum Failure {
     Spawn,
     Cancelled,

@@ -6,7 +6,7 @@
 #   sh scripts/cli-history-check.sh pi ollama/qwen2.5:3b [runs]
 #   sh scripts/cli-history-check.sh opencode opencode/<model>-free [runs]
 #
-# It records the path, size and modification time of every file under the CLI's data folders,
+# It records the path, size, modification time and SHA-256 of every file under the CLI's data folders,
 # runs the rewrites through Retone's own adapter code (`retone --cli-check`), records again, and
 # fails on any new, changed or removed file. It never deletes or edits the CLI's files.
 # Do not use the CLI in another window while the check runs: that also changes these folders.
@@ -24,10 +24,14 @@ runs=${3:-5}
 
 # The same folders as the plan's release gate. Pi: all of ~/.pi/agent, wider than the app's
 # runtime guard (sessions only), so settings or caches written by a new version also show.
+# The folders become the positional arguments, so a HOME with spaces stays one path each.
 case $cli in
-pi) dirs="$HOME/.pi/agent" source_file=src/provider/pi.rs ;;
+pi)
+	set -- "$HOME/.pi/agent"
+	source_file=src/provider/pi.rs
+	;;
 opencode)
-	dirs="$HOME/.local/share/opencode $HOME/.local/state/opencode $HOME/.cache/opencode $HOME/.config/opencode"
+	set -- "$HOME/.local/share/opencode" "$HOME/.local/state/opencode" "$HOME/.cache/opencode" "$HOME/.config/opencode"
 	source_file=src/provider/opencode.rs
 	;;
 *) usage ;;
@@ -40,34 +44,40 @@ retone=target/debug/retone
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Files: modification time, size, path (BSD stat), at every level, unlike the runtime guard.
-# Folders: path only. A folder's time also changes when an entry is made and deleted again; Pi
-# does that on every start (even `pi --version`, which gets no text), and nothing stays on disk.
-# Folder times go to a second list that only prints a note.
+# snapshot OUT DIR...: every non-folder entry with modification time, size and path (BSD stat,
+# lstat), a SHA-256 of every regular file (times have one-second steps, so a same-size rewrite
+# within a second needs the hash), and every folder path, at every level, unlike the runtime
+# guard. Not in a pipe, so `set -e` stops the check when find, stat or shasum cannot read a path:
+# an incomplete snapshot is no proof.
+# Folder times are kept apart (OUT.folders) and only print a note: a folder's time also changes
+# when an entry is made and deleted again. Pi does that on every start (even `pi --version`,
+# which gets no text), and nothing stays on disk.
 snapshot() {
-	for dir in $dirs; do
+	out=$1
+	shift
+	: >"$out.raw"
+	: >"$out.folders.raw"
+	for dir in "$@"; do
 		if [ -e "$dir" ]; then
-			find "$dir" ! -type d -exec stat -f '%m %z %N' {} +
-			find "$dir" -type d -exec stat -f 'folder %N' {} +
+			{
+				find "$dir" ! -type d -exec stat -f '%m %z %N' {} +
+				find "$dir" -type f -exec shasum -a 256 {} +
+				find "$dir" -type d -exec stat -f 'folder %N' {} +
+			} >>"$out.raw"
+			find "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
 		else
-			echo "missing $dir"
+			echo "missing $dir" >>"$out.raw"
 		fi
-	done | LC_ALL=C sort
+	done
+	LC_ALL=C sort "$out.raw" >"$out"
+	LC_ALL=C sort "$out.folders.raw" >"$out.folders"
 }
 
-folder_times() {
-	for dir in $dirs; do
-		[ -e "$dir" ] && find "$dir" -type d -exec stat -f '%m %N' {} +
-	done | LC_ALL=C sort
-}
-
-snapshot >"$work/before"
-folder_times >"$work/folders-before"
+snapshot "$work/before" "$@"
 # A pipe hides the exit code in POSIX sh, so the code is printed as a line and read back.
 { "$retone" --cli-check --provider "$cli" --model "$model" --runs "$runs" 2>&1 && echo "exit=0" || echo "exit=$?"; } |
 	tee "$work/run"
-snapshot >"$work/after"
-folder_times >"$work/folders-after"
+snapshot "$work/after" "$@"
 
 status=$(sed -n 's/^exit=//p' "$work/run")
 version=$(sed -n 's/^version=//p' "$work/run")
@@ -84,10 +94,10 @@ if [ "$status" -ne 0 ]; then
 	exit 1
 fi
 echo
-echo "PASS: $cli $version left no new, changed or removed file in: $dirs"
-if ! diff -q "$work/folders-before" "$work/folders-after" >/dev/null; then
+echo "PASS: $cli $version left no new, changed or removed file in: $*"
+if ! diff -q "$work/before.folders" "$work/after.folders" >/dev/null; then
 	echo "Note: these folder times changed, with no file left behind (a short-lived lock or temp file):"
-	diff "$work/folders-before" "$work/folders-after" | sed -n 's/^> [0-9]* /  /p'
+	diff "$work/before.folders" "$work/after.folders" | sed -n 's/^> [0-9]* /  /p'
 fi
 if ! grep -q "\"$version\"" "$source_file"; then
 	echo "Add \"$version\" to VERIFIED in $source_file."

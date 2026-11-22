@@ -14,8 +14,6 @@
 use crate::eval::flag;
 use crate::provider::{Cancel, Env, Kind, Outcome, cli, opencode, pi};
 use crate::styles::Style;
-use std::path::Path;
-use std::process::Command;
 
 /// Sample text only: the check never sends user text.
 const SAMPLE: &str = "hey so the deploy broke because the config had the wrong port, i fixed it now";
@@ -39,6 +37,9 @@ pub fn run_from_args() -> Option<i32> {
 fn run(args: &[String]) -> Result<bool, String> {
     let model = flag(args, "--model").ok_or("--model is required")?;
     let runs: usize = flag(args, "--runs").unwrap_or("5").parse().map_err(|_| "--runs must be a number")?;
+    if runs == 0 {
+        return Err("--runs must be at least 1".into());
+    }
     let env = Env::system().ok_or("HOME is not set")?;
     let (kind, program) = match flag(args, "--provider").ok_or("--provider is required")? {
         "pi" => (Kind::Pi, &env.pi_program),
@@ -46,7 +47,7 @@ fn run(args: &[String]) -> Result<bool, String> {
         other => return Err(format!("unknown provider {other} (use pi or opencode)")),
     };
     let name = kind.name();
-    let version = installed_version(program).ok_or_else(|| format!("cannot read the {name} version"))?;
+    let version = cli::installed_version(program).ok_or_else(|| format!("cannot read the {name} version"))?;
     let verified = [version.as_str()];
     println!("{name} {version} · {model} · {runs} runs");
 
@@ -67,12 +68,4 @@ fn run(args: &[String]) -> Result<bool, String> {
     }
     println!("version={version}");
     Ok(passed)
-}
-
-/// Asked with a temp `HOME`: OpenCode logs even `--version` under `~/.local/share`, and this
-/// probe must not change the folders the script compares. The adapter's own probe uses its envs.
-fn installed_version(program: &Path) -> Option<String> {
-    let home = cli::WorkDir::new().ok()?;
-    let output = Command::new(program).arg("--version").env("HOME", home.path()).env("NO_COLOR", "1").output().ok()?;
-    cli::parse_version(&String::from_utf8_lossy(&output.stdout))
 }
