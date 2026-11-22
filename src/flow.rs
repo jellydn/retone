@@ -53,13 +53,15 @@ pub enum Notice {
     CaptureFailed(String),
 }
 
-/// What native capture found. `can_replace` is false in clipboard-only mode and when the target
-/// cannot be verified again before Replace.
+/// What native capture found. `can_replace` is false in clipboard-only mode, when the text came
+/// from the clipboard, and when the target cannot be verified again before Replace.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Captured {
     pub text: String,
     pub secure_field: bool,
     pub can_replace: bool,
+    /// The text is the clipboard's, not a selection: nothing was selected, or Accessibility is off.
+    pub from_clipboard: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
