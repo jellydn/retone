@@ -49,8 +49,27 @@ fn page_icon(page: Page) -> &'static Icon {
     }
 }
 
+/// macOS draws the traffic lights over the sidebar (the window has a transparent, full-size
+/// titlebar), so the sidebar's content starts below them, as in Hex.
+const SIDEBAR_TOP: f32 = if cfg!(target_os = "macos") { 36.0 } else { 12.0 };
+
+static APP_ICON: Icon =
+    Icon { name: "retone-app-icon", view: 1024.0, body: include_str!("../../assets/icon/icon-16.svg") };
+
+/// The app icon and name at the top of the sidebar.
+fn brand(k: &Kit) -> El {
+    row()
+        .key("brand")
+        .h(32.0)
+        .px(6.0)
+        .gap(8.0)
+        .center_y()
+        .child(icon(&APP_ICON, 22.0).a11y_hidden())
+        .child(text("Retone").font(k.ty.body_medium).color(k.c.text_base))
+}
+
 fn sidebar(s: &SettingsUi, k: &Kit) -> El {
-    let mut bar = Sidebar::new().label("Settings").row_gap(4.0).header_padding(12.0, 0.0);
+    let mut bar = Sidebar::new().label("Settings").row_gap(4.0).header(brand(k)).header_padding(0.0, 12.0);
     for (page, label) in PAGES {
         bar = bar.child(
             SidebarRow::new(label)
@@ -61,14 +80,16 @@ fn sidebar(s: &SettingsUi, k: &Kit) -> El {
         );
     }
     bar = bar.footer(footer(s, k));
+    // The area under the traffic lights stands in for the titlebar: it moves the window.
     col()
         .key("sidebar-pane")
         .w(210.0)
         .h_full()
         .fill(k.c.bg_deep)
         .border(1.0, k.c.border_muted)
-        .pt(8.0)
-        .child(bar.build(k))
+        .child(el().key("titlebar-space").w_full().h(SIDEBAR_TOP).window_drag())
+        // The kit sidebar is full height; this box gives it only what is left under the space.
+        .child(col().key("sidebar-body").w_full().grow(1.0).min_h(0.0).child(bar.build(k)))
 }
 
 /// What's new, the version, and how this copy updates, as in Hex's sidebar footer.
