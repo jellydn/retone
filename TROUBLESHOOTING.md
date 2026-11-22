@@ -37,6 +37,10 @@ Some apps (for example Electron apps such as Slack) do not report where the care
 
 Retone replaces the text only when the same app, the same field and the same selection are still in front. If you switched apps, typed, or changed the selection while the rewrite ran, Retone does not paste. Use **⌘C** to copy the rewrite and paste it yourself.
 
+## Only Copy is offered in a terminal
+
+Retone does not replace text in terminals (Terminal, iTerm2, Ghostty, WezTerm, kitty, Alacritty, Warp): a pasted line break can run a command. Use **⌘C** and paste the rewrite yourself.
+
 ## My clipboard changed
 
 Retone saves the clipboard before it copies or pastes, and puts it back afterwards. If another app writes to the clipboard during a rewrite, Retone keeps that newer content and does not restore. File a bug if the clipboard changes in other cases.

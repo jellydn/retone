@@ -212,7 +212,7 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         } else if p.from_clipboard {
             "Nothing was selected, so Retone used the clipboard text. Only Copy is offered.".to_string()
         } else {
-            "Retone cannot verify this field, so only Copy is offered.".to_string()
+            "Retone cannot replace text in this app or field, so only Copy is offered.".to_string()
         });
     }
     if let Some(warning) = &p.adapter_warning {

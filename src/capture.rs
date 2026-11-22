@@ -9,6 +9,7 @@
 use crate::flow::Captured;
 use crate::mac::{ax, events, pasteboard::Board, screens};
 use crate::spike_log::spike;
+use crate::strategy::{self, Strategy};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -21,6 +22,8 @@ pub struct Capture {
     /// The element to check again before Replace; None in clipboard-only mode.
     pub target: Option<ax::Target>,
     pub pid: Option<i32>,
+    /// How Replace writes into this app, chosen once at capture.
+    pub strategy: Strategy,
 }
 
 /// True when Retone can read other apps and post keys. Without it, clipboard-only mode.
@@ -34,7 +37,7 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
         let text = board.text().unwrap_or_default();
         spike!("capture path=clipboard-only chars={}", text.chars().count());
         let captured = Captured { text, secure_field: false, can_replace: false, from_clipboard: true };
-        return Ok(Capture { captured, target: None, pid: None });
+        return Ok(Capture { captured, target: None, pid: None, strategy: Strategy::CopyOnly });
     }
     let pid = screens::frontmost_pid();
     // The hotkey can fire while Retone's own Settings window is in front (recording, testing);
@@ -43,9 +46,12 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
         return Err("Select text in another app, then press your shortcut.".into());
     }
     let target = ax::Target::focused();
+    let bundle_id = screens::frontmost_bundle_id();
+    let overrides = rune_core::env::var("RETONE_APPLY_OVERRIDE").unwrap_or_default();
+    let strategy = strategy::for_app(bundle_id.as_deref(), &overrides);
     spike!(
-        "capture app={} ax_element={} range={:?}",
-        screens::frontmost_bundle_id().unwrap_or_default(),
+        "capture app={} strategy={strategy:?} ax_element={} range={:?}",
+        bundle_id.as_deref().unwrap_or_default(),
         target.is_some(),
         target.as_ref().and_then(|t| t.range).map(|r| (r.location, r.length))
     );
@@ -53,7 +59,7 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
     if target.as_ref().is_some_and(ax::Target::is_secure) {
         spike!("capture path=refused-secure-field");
         let captured = Captured { text: String::new(), secure_field: true, can_replace: false, from_clipboard: false };
-        return Ok(Capture { captured, target: None, pid });
+        return Ok(Capture { captured, target: None, pid, strategy: Strategy::CopyOnly });
     }
     let selection = match target.as_ref().and_then(ax::Target::selected_text) {
         Some(text) => {
@@ -78,9 +84,10 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
     if from_clipboard {
         spike!("capture path=clipboard-no-selection chars={}", text.chars().count());
     }
-    // Replace needs a selection and an element to check again before pasting; otherwise Copy only.
-    let can_replace = target.is_some() && !from_clipboard;
-    Ok(Capture { captured: Captured { text, secure_field: false, can_replace, from_clipboard }, target, pid })
+    // Replace needs a selection, an element to check again before writing, and an app that is
+    // not Copy only.
+    let can_replace = target.is_some() && !from_clipboard && strategy != Strategy::CopyOnly;
+    Ok(Capture { captured: Captured { text, secure_field: false, can_replace, from_clipboard }, target, pid, strategy })
 }
 
 /// The selection when there is one; otherwise the clipboard, read only then. True when the text

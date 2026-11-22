@@ -1,7 +1,7 @@
 //! Accessibility (AX) reads on the focused element of the frontmost app.
 //!
 //! Calls go to another process and can block, so they run off the frame loop with a short
-//! messaging timeout. Nothing here writes to the target app.
+//! messaging timeout. The only write is [`Target::set_selected_text`], for apps on AX set.
 
 use crate::placement::Rect;
 use objc2_application_services::{
@@ -154,6 +154,32 @@ impl Target {
             Some(text) if text == captured_text => Ok(()),
             Some(_) => Err("the selected text differs"),
             None => Err("the field's selection cannot be read again"),
+        }
+    }
+
+    /// Writes `text` over the selection through `AXSelectedText`, then reads the same range back.
+    /// Only the read-back proves the write: terminals and Chromium fields return success and
+    /// change nothing. On Err the caller must not paste, because the write may have landed.
+    pub fn set_selected_text(&self, text: &str) -> Result<(), &'static str> {
+        let range = self.range.ok_or("the field reports no selection range")?;
+        let attribute = CFString::from_static_str("AXSelectedText");
+        let mut settable: u8 = 0;
+        // SAFETY: `settable` is a valid out pointer for an AX Boolean (unsigned char).
+        let status = unsafe { self.element.is_attribute_settable(&attribute, NonNull::from(&mut settable)) };
+        if status != AXError::Success || settable == 0 {
+            return Err("the field does not accept a direct write");
+        }
+        let value = CFString::from_str(text);
+        // SAFETY: `element` is live and `value` is a CFString, the type AXSelectedText takes.
+        let status = unsafe { self.element.set_attribute_value(&attribute, &value) };
+        if status != AXError::Success {
+            return Err("the app refused the write");
+        }
+        // AX ranges count UTF-16 units, like CFString.
+        let written = CFRange { location: range.location, length: text.encode_utf16().count() as isize };
+        match string_for_range(&self.element, written) {
+            Some(now) if now == text => Ok(()),
+            _ => Err("the app did not confirm the new text"),
         }
     }
 }
