@@ -66,7 +66,17 @@ snapshot() {
 			} >>"$out.raw"
 			find "$dir" -type d -exec stat -f '%m %N' {} + >>"$out.folders.raw"
 		else
-			echo "missing $dir" >>"$out.raw"
+			# [ -e ] is also false when a parent folder cannot be read. Only "No such file or
+			# directory" means missing; any other error stops the check, because both snapshots
+			# would then say "missing" and pass with nothing checked.
+			err=$(LC_ALL=C ls -d "$dir" 2>&1 >/dev/null) || true
+			case $err in
+			*'No such file or directory'*) echo "missing $dir" >>"$out.raw" ;;
+			*)
+				echo "FAIL: cannot read $dir${err:+: $err}. The check is not complete." >&2
+				exit 1
+				;;
+			esac
 		fi
 	done
 	LC_ALL=C sort "$out.raw" >"$out"
