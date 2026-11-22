@@ -1,8 +1,13 @@
 //! Codex adapter: `codex exec --ephemeral` in a read-only sandbox, without the user's config or
 //! rules, and with the shell, memories, plugins, apps and browser turned off.
 //!
-//! `--ignore-user-config` skips `config.toml` (its MCP servers and its `notify` program); the
-//! login still comes from `CODEX_HOME`. `memories` is on by default and could keep text on disk.
+//! `--ignore-user-config` skips `config.toml` (its MCP servers and its `notify` program).
+//! `memories` is on by default and could keep text on disk.
+//!
+//! Codex writes its state on every run, even with `--ephemeral`: `installation_id`, SQLite
+//! databases (threads, logs, memories, goals, queue) and its bundled skills. So it runs with
+//! `CODEX_HOME` in Retone's private temp folder, deleted after the run, with only a copy of the
+//! user's `auth.json` for the login. The user's Codex home is never written.
 
 use super::cli::{self, Run, WorkDir};
 use super::{Cancel, Outcome};
@@ -42,12 +47,19 @@ pub fn rewrite(
         return fail(error);
     }
     let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
-    // The child inherits CODEX_HOME and writes there; the same rule as the release gate's
-    // ${CODEX_HOME:-$HOME/.codex}.
-    let codex_home = rune_core::env::var("CODEX_HOME")
+    // The user's Codex home: the same rule as the release gate's ${CODEX_HOME:-$HOME/.codex}.
+    let user_home = rune_core::env::var("CODEX_HOME")
         .filter(|dir| !dir.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".codex"));
+    let private = workdir.path().join("codex");
+    if std::fs::create_dir(&private).is_err() {
+        return fail(t!("provider.temp_folder").into());
+    }
+    let auth = user_home.join("auth.json");
+    if auth.is_file() {
+        std::fs::copy(&auth, private.join("auth.json")).ok();
+    }
     let mut args: Vec<OsString> = [
         "exec",
         "--ephemeral",
@@ -72,12 +84,13 @@ pub fn rewrite(
         program,
         verified,
         args,
-        envs: vec![],
-        // Sessions go to sessions/YYYY/MM/DD/, so every date folder is watched too; the release
-        // gate checks the whole Codex home, and is the proof.
-        data_dirs: [codex_home.join("sessions"), codex_home.join("memories")]
+        // CODEX_SQLITE_HOME would move the databases out again, so it points there too.
+        envs: vec![("CODEX_HOME", private.clone().into_os_string()), ("CODEX_SQLITE_HOME", private.into_os_string())],
+        // Nothing should change in the user's Codex home now; the guard watches its top level and
+        // every sessions/YYYY/MM/DD folder. The release gate checks all of it, and is the proof.
+        data_dirs: [user_home.clone(), user_home.join("sessions"), user_home.join("memories")]
             .into_iter()
-            .chain(session_folders(&codex_home.join("sessions")))
+            .chain(session_folders(&user_home.join("sessions")))
             .collect(),
         stdin: styles::build_single(style, text),
     };

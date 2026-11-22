@@ -50,7 +50,9 @@ claude)
 	source_file=src/provider/claude.rs
 	;;
 codex)
-	set -- "${CODEX_HOME:-$HOME/.codex}"
+	# skills is often a symlink to a shared folder (~/.agents/skills); a root symlink is followed,
+	# so a run that writes Codex's bundled skills there is caught too.
+	set -- "${CODEX_HOME:-$HOME/.codex}" "${CODEX_HOME:-$HOME/.codex}/skills"
 	source_file=src/provider/codex.rs
 	;;
 *) usage ;;
