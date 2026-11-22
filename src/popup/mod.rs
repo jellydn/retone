@@ -41,6 +41,8 @@ pub struct Popup {
     local_models: Latest<Result<Vec<String>, String>>,
     cancel: Cancel,
     links: Option<Links>,
+    /// The last announcement, so a screen reader hears each change once.
+    last_spoken: Option<String>,
 }
 
 pub struct Picker {
@@ -85,6 +87,7 @@ impl Default for Popup {
             local_models: Latest::default(),
             cancel: Cancel::default(),
             links: None,
+            last_spoken: None,
         }
     }
 }
@@ -289,6 +292,14 @@ impl Popup {
                 Effect::CopyText(text) => tx.copy(text),
                 Effect::ClosePopup => self.close(),
             }
+        }
+        let spoken = view::spoken(self);
+        let words = spoken.as_ref().map(|(words, _)| words.clone());
+        if words != self.last_spoken {
+            if let Some((words, how)) = spoken {
+                tx.announce(words, how);
+            }
+            self.last_spoken = words;
         }
     }
 

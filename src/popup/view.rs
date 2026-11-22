@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::flow::{Event, Notice, Phase, State};
 use crate::provider::consent;
 use crate::styles::{PRESETS, Style};
-use rune::{Cx, El, ScrollSpec, Span, Tx, col, el, row, spacer, text};
+use rune::{Cx, El, LiveRegion, ScrollSpec, Span, Tx, col, el, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, Kit, List, ListItem, Spinner};
 
 /// The styles the picker offers, in key order 1–5: the presets, then Custom when it is set.
@@ -15,6 +15,30 @@ pub fn styles(config: &Config) -> Vec<Style> {
         all.push(Style::Custom(config.custom_style.trim().to_string()));
     }
     all
+}
+
+/// What a screen reader hears when the popup changes, and how urgently. Errors interrupt; the
+/// rest waits. The rewrite itself is not read out: the user moves to it, as to any text.
+pub fn spoken(p: &Popup) -> Option<(String, LiveRegion)> {
+    use LiveRegion::{Assertive, Polite};
+    if let Some(error) = &p.flow.apply_error {
+        return Some((format!("Replace failed: {error}. Use Copy instead."), Assertive));
+    }
+    match &p.flow.state {
+        State::Idle | State::Capturing { .. } | State::Applying { .. } => None,
+        State::Notice(notice) => {
+            let (title, body) = notice_text(p, notice);
+            Some((format!("{title}. {body}"), Assertive))
+        }
+        State::AwaitingConsent { .. } => Some((p.provider.as_ref().map(consent::question).unwrap_or_default(), Polite)),
+        State::Previewing { phase: Phase::Loading, .. } => Some(("Rewriting.".into(), Polite)),
+        State::Previewing { phase: Phase::Failed(error), .. } => Some((format!("Rewrite failed. {error}"), Assertive)),
+        State::Previewing { phase: Phase::Ready(_), can_replace, .. } => {
+            let keys =
+                if *can_replace { "Press Return to replace it, or ⌘C to copy it." } else { "Press ⌘C to copy it." };
+            Some((format!("Rewrite ready. {keys}"), Polite))
+        }
+    }
 }
 
 pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
@@ -66,7 +90,7 @@ fn header(p: &Popup, k: &Kit) -> El {
         .w_full()
         .gap(8.0)
         .center_y()
-        .child(text("Retone").font(k.ty.ui_medium).color(k.c.text_strong))
+        .child(text("Retone").font(k.ty.ui_medium).color(k.c.text_strong).a11y_hidden())
         .child(spacer())
         .child(if can_switch(p) {
             Button::new(format!("{source} ▾"))
@@ -74,9 +98,23 @@ fn header(p: &Popup, k: &Kit) -> El {
                 .shortcut("⌘P")
                 .on_press(|p: &mut Popup| p.toggle_picker())
                 .build(k)
+                .label(format!("Provider: {source}"))
         } else {
-            text(source).font(k.ty.text_xsmall).color(k.c.text_muted).max_lines(1)
+            text(source.clone())
+                .font(k.ty.text_xsmall)
+                .color(k.c.text_muted)
+                .max_lines(1)
+                .label(format!("Provider: {source}"))
         })
+}
+
+/// The picker's key hint in words: a screen reader reads ↑↓ and ⏎ as symbol names.
+fn spoken_hint(listing: bool) -> &'static str {
+    if listing {
+        "Loading local models. Arrow keys choose, Return uses, Escape goes back."
+    } else {
+        "Arrow keys choose, Return uses, Escape goes back."
+    }
 }
 
 fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
@@ -107,9 +145,10 @@ fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
                 .grow(1.0)
                 .min_h(0.0)
                 .scroll(ScrollSpec { stick_bottom: false })
+                .label("Providers")
                 .child(list.build(k)),
         )
-        .child(text(hint).font(k.ty.text_xsmall).color(k.c.text_muted))
+        .child(text(hint).font(k.ty.text_xsmall).color(k.c.text_muted).label(spoken_hint(picker.listing)))
 }
 
 fn loading(k: &Kit, label: &str) -> El {
@@ -148,15 +187,19 @@ fn action(label: &str, shortcut: &str, variant: ButtonVariant, event: fn() -> Ev
         .build(k)
 }
 
-fn notice_body(p: &Popup, k: &Kit, notice: &Notice) -> El {
-    let (title, body) = match notice {
+fn notice_text(p: &Popup, notice: &Notice) -> (String, String) {
+    match notice {
         Notice::Refused(refusal) => (refusal.title().to_string(), refusal.message()),
         Notice::NoProvider => {
             let body = p.provider_problem.clone().unwrap_or_else(|| "Choose a provider in Settings.".into());
             ("No provider".into(), body)
         }
         Notice::CaptureFailed(error) => ("Cannot read the selection".into(), error.clone()),
-    };
+    }
+}
+
+fn notice_body(p: &Popup, k: &Kit, notice: &Notice) -> El {
+    let (title, body) = notice_text(p, notice);
     let mut actions = vec![action("OK", "⎋", ButtonVariant::Neutral, || Event::Cancel, k)];
     if matches!(notice, Notice::NoProvider) {
         actions.insert(
@@ -208,7 +251,7 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         added.into_iter().map(|r| Span::new(r.start, r.end).bg(k.c.success.bg, 1.0).color(k.c.success.fg)).collect();
     let (result, ready) = match phase {
         Phase::Loading => (loading(k, "Rewriting…"), false),
-        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added), true),
+        Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added).label("Rewrite"), true),
         Phase::Failed(error) => (message(k, "error", "Rewrite failed", error, k.c.danger.fg), false),
     };
     let mut notes = Vec::new();
@@ -245,7 +288,8 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
                 .font(k.ty.text_small)
                 .color(k.c.text_muted)
                 .max_lines(2)
-                .spans(removed),
+                .spans(removed)
+                .label(format!("Original: {original}")),
         )
         .child(el().w_full().h(1.0).fill(k.c.border_weak))
         .child(result);
@@ -266,7 +310,7 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>) -> El {
 }
 
 fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
-    let mut picker = row().key("styles").w_full().gap(4.0);
+    let mut picker = row().key("styles").w_full().gap(4.0).label("Style");
     for (index, style) in styles(&p.config).into_iter().enumerate() {
         let on = style.name() == current.name();
         let label = format!("{} {}", index + 1, style.name());
@@ -275,8 +319,55 @@ fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
             Button::new(label)
                 .variant(if on { ButtonVariant::Contrast } else { ButtonVariant::GhostMuted })
                 .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(Event::ChangeStyle(chosen.clone()), tx))
-                .build(k),
+                .build(k)
+                // The digit in the visible label is the key; read the name, state and key apart.
+                .label(format!("{} style", style.name()))
+                .checked(on)
+                .shortcut_hint((index + 1).to_string()),
         );
     }
     picker
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::Refusal;
+    use rune::machine::Attempt;
+
+    fn previewing(phase: Phase, can_replace: bool) -> Popup {
+        let mut p = Popup::default();
+        p.flow.state =
+            State::Previewing { attempt: Attempt(1), original: "a".into(), style: Style::Clear, phase, can_replace };
+        p
+    }
+
+    #[test]
+    fn errors_interrupt_and_progress_waits() {
+        let (words, how) = spoken(&previewing(Phase::Failed("No answer within 60 s.".into()), true)).expect("spoken");
+        assert_eq!((words.as_str(), how), ("Rewrite failed. No answer within 60 s.", LiveRegion::Assertive));
+        assert_eq!(spoken(&previewing(Phase::Loading, true)), Some(("Rewriting.".into(), LiveRegion::Polite)));
+        assert_eq!(spoken(&Popup::default()), None, "nothing while idle");
+
+        let mut too_long = Popup::default();
+        too_long.flow.state = State::Notice(Notice::Refused(Refusal::TooLong { chars: 2431 }));
+        let (words, how) = spoken(&too_long).expect("spoken");
+        assert!(words.starts_with("Selection too long. 2,431 characters") && how == LiveRegion::Assertive, "{words}");
+    }
+
+    #[test]
+    fn a_ready_rewrite_names_only_the_keys_that_work() {
+        let (words, _) = spoken(&previewing(Phase::Ready("b".into()), true)).expect("spoken");
+        assert!(words.contains("Return to replace"), "{words}");
+        let (words, _) = spoken(&previewing(Phase::Ready("b".into()), false)).expect("spoken");
+        assert!(!words.contains("Return") && words.contains("⌘C"), "{words}");
+        // A failed Replace keeps the preview on screen but is announced as the error.
+        let mut failed = previewing(Phase::Ready("b".into()), true);
+        failed.flow.apply_error = Some("the selection changed".into());
+        let (words, how) = spoken(&failed).expect("spoken");
+        assert_eq!(
+            (words.as_str(), how),
+            ("Replace failed: the selection changed. Use Copy instead.", LiveRegion::Assertive)
+        );
+    }
 }
