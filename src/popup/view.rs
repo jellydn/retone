@@ -303,6 +303,8 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) ->
         .grow(1.0)
         .min_h(0.0)
         .scroll(ScrollSpec { stick_bottom: follow })
+        // AccessKit gives a scroll view AXUnknown on macOS; a document is text to read.
+        .role("document")
         .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
