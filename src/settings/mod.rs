@@ -440,6 +440,7 @@ type Scene = (&'static str, fn(&mut SettingsUi));
 
 pub const SCENES: &[Scene] = &[
     ("general", |s| s.recorder = ShortcutRecorderState::new("alt+super+r".parse().ok())),
+    ("general-voiceover", |s| s.recorder = ShortcutRecorderState::new("ctrl+alt+shift+super+l".parse().ok())),
     ("general-advanced", |s| s.advanced_open = true),
     ("general-theme-open", |s| s.open_select = Some("theme")),
     ("general-light", |s| s.config.theme = crate::theme::Theme::Light),
