@@ -196,6 +196,7 @@
   "settings.styles.not_set": "Not set",
   "settings.styles.shortcut_disabled": "Set the custom style first.",
   "settings.styles.shortcut_help": "Opens the popup in this style.",
+  "settings.styles.shortcut_help_voiceover": "Opens the popup in this style. With VoiceOver on, press VO-Tab first.",
   "settings.styles.shortcut_label": "Rewrite in the {{name}} style",
   "settings.test.button": "Test",
   "settings.test.idle": "Check that the shortcut reaches Retone.",

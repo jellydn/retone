@@ -267,10 +267,9 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         .on_change(|s: &mut SettingsUi, next, _: &mut Tx| s.change_hotkey(next))
         .error_message(recorder_message(s))
         .build(k);
-    let shortcut_help = match s.recorder.shortcut().map(|chord| chord.modifiers()) {
+    let shortcut_help = match s.recorder.shortcut() {
         None => t!("settings.shortcut.help_unset"),
-        // ⌃⌥ is the VoiceOver key, so with VoiceOver on such a chord never reaches Retone.
-        Some(mods) if mods.ctrl && mods.alt => t!("settings.shortcut.help_voiceover"),
+        chord if uses_voiceover_keys(chord) => t!("settings.shortcut.help_voiceover"),
         Some(_) => t!("settings.shortcut.help_set"),
     };
     let test_help = match s.hotkey_test {
@@ -644,6 +643,11 @@ fn styles_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(card(k, "style-shortcuts-card", style_shortcut_rows(s, k)))
 }
 
+/// ⌃⌥ is the VoiceOver key: with VoiceOver on, such a chord reaches Retone only after VO-Tab.
+fn uses_voiceover_keys(chord: Option<&Shortcut>) -> bool {
+    chord.is_some_and(|chord| chord.modifiers().ctrl && chord.modifiers().alt)
+}
+
 /// One optional shortcut per style; it opens the popup in that style. Custom needs its
 /// instruction first.
 fn style_shortcut_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
@@ -664,8 +668,13 @@ fn style_shortcut_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
             .on_change(move |s: &mut SettingsUi, next, _: &mut Tx| s.change_style_hotkey(index, next))
             .error_message(recorder_message(s))
             .build(k);
-            let note =
-                if disabled { t!("settings.styles.shortcut_disabled") } else { t!("settings.styles.shortcut_help") };
+            let note = if disabled {
+                t!("settings.styles.shortcut_disabled")
+            } else if uses_voiceover_keys(s.style_recorders[index].shortcut()) {
+                t!("settings.styles.shortcut_help_voiceover")
+            } else {
+                t!("settings.styles.shortcut_help")
+            };
             setting(k, &format!("style-shortcut-row-{index}"), &glyphs::KEYBOARD, name, help(k, note), recorder)
         })
         .collect()
