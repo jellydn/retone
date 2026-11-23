@@ -6,24 +6,30 @@
 //!
 //! ```text
 //! retone --eval-styles --model qwen2.5:3b [--endpoint http://127.0.0.1:8080/v1] [--text FILE]
-//! retone --eval-styles --provider pi --model ollama/qwen2.5:3b
+//! retone --eval-styles --provider pi --model ollama/qwen2.5:3b [--style summarize]
 //! ```
 
 #![forbid(unsafe_code)]
 
 use crate::provider::{Cancel, Env, Outcome, Provider, local};
-use crate::styles::{PRESETS, Style};
+use crate::styles::{PRESETS, Style, TONES};
 use std::collections::BTreeSet;
 
 /// Concise must cut at least this much, or it did not do its one job.
 const CONCISE_MAX_RATIO: f64 = 0.7;
+/// Fix corrects errors only: past this word distance from the text, it rewrote it.
+const FIX_MAX_CHANGE: f64 = 0.35;
+/// Summarize writes "at most a third of the words"; this leaves room for longer names and numbers.
+const SUMMARY_MAX_RATIO: f64 = 0.5;
+/// Expand must add wording, but at most twice the length (the user's limit for this action).
+const EXPAND_RATIOS: std::ops::RangeInclusive<f64> = 1.2..=2.0;
 /// Two answers closer than this read as the same rewrite.
 const MIN_PAIR_DISTANCE: f64 = 0.1;
-/// The styles together must spread at least this far: some pairs may fairly read alike (a
+/// The tones together must spread at least this far: some pairs may fairly read alike (a
 /// Professional and a Technical email), but not the whole set.
 const MIN_MEAN_DISTANCE: f64 = 0.3;
 
-const SAMPLES: [(&str, &str); 3] = [
+const SAMPLES: [(&str, &str); 4] = [
     (
         "chat",
         "hey so i looked at the deploy thing and basically it broke because the config file had the wrong port i \
@@ -39,6 +45,14 @@ const SAMPLES: [(&str, &str); 3] = [
         "bug",
         "the app is kind of slow when you open a big file, like it freezes for a few seconds and then it works \
          again, i think its because it loads everything at once instead of bit by bit",
+    ),
+    (
+        "notes",
+        "ok so notes from todays call. we agreed to ship version 2.4 on march 3 if qa signs off by friday. anna will \
+         finish the export bug fix, it affects about 40 customers who use csv files with more than 10000 rows. tom \
+         said the new pricing page needs another review because legal hasnt seen the last 2 changes yet. we also \
+         talked about moving the weekly sync from tuesday to wednesday at 10am but nobody decided. next call is in 2 \
+         weeks, please send your updates before then",
     ),
 ];
 
@@ -82,6 +96,10 @@ fn run(args: &[String]) -> Result<bool, String> {
         Some(path) => Some(std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?),
         None => None,
     };
+    let styles: Vec<&Style> = match flag(args, "--style") {
+        Some(id) => vec![PRESETS.iter().find(|style| style.id() == id).ok_or(format!("unknown style {id}"))?],
+        None => PRESETS.iter().collect(),
+    };
     let samples: Vec<(&str, &str)> = match &own_text {
         Some(text) => vec![("text", text.trim())],
         None => SAMPLES.to_vec(),
@@ -90,9 +108,9 @@ fn run(args: &[String]) -> Result<bool, String> {
     println!("# Style eval: {} · {}\n", provider.kind().name(), provider.model());
     let mut all_passed = true;
     for (name, text) in samples {
-        let answers: Vec<(Style, String)> = PRESETS
+        let answers: Vec<(Style, String)> = styles
             .iter()
-            .map(|style| {
+            .map(|&style| {
                 let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env, &|_| {});
                 (style.clone(), answer.unwrap_or_else(|error| format!("ERROR: {error}")))
             })
@@ -123,20 +141,24 @@ impl<'a> Report<'a> {
         for (style, answer, ratio, changed) in &rows {
             if answer.starts_with("ERROR:") {
                 failures.push(format!("{} failed", style.name()));
-            } else if *changed == 0.0 {
+                continue;
+            }
+            // Fix may fairly return a text that has no errors unchanged.
+            if *changed == 0.0 && **style != Style::Fix {
                 failures.push(format!("{} returned the text unchanged", style.name()));
             }
-            if **style == Style::Concise && *ratio > CONCISE_MAX_RATIO {
-                failures.push(format!(
-                    "Concise kept {:.0}% of the length (max {:.0}%)",
-                    ratio * 100.0,
-                    CONCISE_MAX_RATIO * 100.0
-                ));
+            failures.extend(job_failure(style, original, answer, *ratio, *changed));
+            let added = new_numbers(original, answer);
+            if !added.is_empty() {
+                failures.push(format!("{} added numbers the text does not have: {}", style.name(), added.join(", ")));
             }
         }
+        // Only the tones must read apart: Fix is close to the text by design, and a summary may
+        // fairly read like Concise.
+        let tones: Vec<_> = rows.iter().filter(|row| PRESETS[..TONES].contains(row.0)).collect();
         let mut distances = Vec::new();
-        for (i, a) in rows.iter().enumerate() {
-            for b in &rows[i + 1..] {
+        for (i, a) in tones.iter().enumerate() {
+            for b in &tones[i + 1..] {
                 let distance = word_distance(a.1, b.1);
                 if distance < MIN_PAIR_DISTANCE {
                     let (x, y) = (a.0.name(), b.0.name());
@@ -146,8 +168,8 @@ impl<'a> Report<'a> {
             }
         }
         let mean = distances.iter().sum::<f64>() / distances.len().max(1) as f64;
-        if mean < MIN_MEAN_DISTANCE {
-            failures.push(format!("the styles are {mean:.2} apart on average (min {MIN_MEAN_DISTANCE})"));
+        if !distances.is_empty() && mean < MIN_MEAN_DISTANCE {
+            failures.push(format!("the tones are {mean:.2} apart on average (min {MIN_MEAN_DISTANCE})"));
         }
         Report { rows, failures }
     }
@@ -170,6 +192,58 @@ impl<'a> Report<'a> {
         out.push_str("\n\n");
         out
     }
+}
+
+/// The one job a style must do, measured against the text. None when it did it, or has no
+/// measurable job.
+fn job_failure(style: &Style, original: &str, answer: &str, ratio: f64, changed: f64) -> Option<String> {
+    let percent = |ratio: f64| format!("{:.0}%", ratio * 100.0);
+    match style {
+        Style::Concise if ratio > CONCISE_MAX_RATIO => {
+            Some(format!("Concise kept {} of the length (max {})", percent(ratio), percent(CONCISE_MAX_RATIO)))
+        }
+        Style::Fix if changed > FIX_MAX_CHANGE => {
+            Some(format!("Fix changed {changed:.2} of the words (max {FIX_MAX_CHANGE}): it rewrote the text"))
+        }
+        Style::Simplify if sentence_words(answer) >= sentence_words(original) => {
+            Some("Simplify did not shorten the sentences".to_string())
+        }
+        Style::Summarize if ratio > SUMMARY_MAX_RATIO => {
+            Some(format!("Summarize kept {} of the length (max {})", percent(ratio), percent(SUMMARY_MAX_RATIO)))
+        }
+        Style::Expand if !EXPAND_RATIOS.contains(&ratio) => Some(format!(
+            "Expand made {} of the length ({} to {})",
+            percent(ratio),
+            percent(*EXPAND_RATIOS.start()),
+            percent(*EXPAND_RATIOS.end())
+        )),
+        Style::Bullets if !is_bullet_list(answer) => Some("Bullets did not answer with a \"- \" list".to_string()),
+        _ => None,
+    }
+}
+
+/// Words per sentence, on average.
+fn sentence_words(text: &str) -> f64 {
+    let sentences: Vec<&str> =
+        text.split(['.', '!', '?', '\n']).filter(|sentence| sentence.split_whitespace().next().is_some()).collect();
+    let words: usize = sentences.iter().map(|sentence| sentence.split_whitespace().count()).sum();
+    words as f64 / sentences.len().max(1) as f64
+}
+
+/// At least two points, and every line a "- " point.
+fn is_bullet_list(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    lines.len() >= 2 && lines.iter().all(|line| line.starts_with("- "))
+}
+
+/// Digit runs in the answer that the text does not have: a cheap sign of an invented fact.
+/// Thousands commas are dropped first, so "10000" written as "10,000" is the same number.
+fn new_numbers(original: &str, answer: &str) -> Vec<String> {
+    let numbers = |text: &str| -> BTreeSet<String> {
+        let digits: String = text.chars().filter(|&c| c != ',').collect();
+        digits.split(|c: char| !c.is_ascii_digit()).filter(|run| !run.is_empty()).map(str::to_string).collect()
+    };
+    numbers(answer).difference(&numbers(original)).cloned().collect()
 }
 
 fn length_ratio(original: &str, answer: &str) -> f64 {
@@ -214,7 +288,50 @@ mod tests {
         let answers: Vec<(Style, String)> = PRESETS.iter().map(|s| (s.clone(), same.clone())).collect();
         let failures = Report::new(original, &answers).failures;
         assert!(failures.iter().any(|f| f.starts_with("Clear and Technical are 0.00")), "{failures:?}");
-        assert!(failures.iter().any(|f| f.starts_with("the styles are 0.00 apart on average")), "{failures:?}");
+        assert!(failures.iter().any(|f| f.starts_with("the tones are 0.00 apart on average")), "{failures:?}");
+    }
+
+    #[test]
+    fn each_action_is_held_to_its_own_job_and_not_to_the_tone_spread() {
+        let original = "the deploy broke becuase the config had the wrong port, we should add a check for it";
+        let check = |style: Style, answer: &str| Report::new(original, &[(style, answer.to_string())]).failures;
+        let longer = |times: usize| vec![original; times].join(" ");
+
+        assert!(
+            check(Style::Fix, "The deploy broke because the config had the wrong port. We should add a check for it.")
+                .is_empty()
+        );
+        assert!(
+            !check(Style::Fix, "A wrong port in the config caused the outage; a validation step would prevent it.")
+                .is_empty()
+        );
+        assert!(check(Style::Summarize, "Wrong port broke deploy; add check.").is_empty());
+        assert!(
+            !check(Style::Summarize, "The deploy broke because the config had the wrong port, so add a check.")
+                .is_empty()
+        );
+        assert!(check(Style::Expand, &longer(1).replace("we should", "so I think that we should really")).is_empty());
+        assert!(!check(Style::Expand, &longer(3)).is_empty(), "past twice the length");
+        assert!(
+            check(Style::Bullets, "- The deploy broke: wrong port in the config.\n- Add a check for it.").is_empty()
+        );
+        assert!(
+            !check(Style::Bullets, "- The deploy broke because the config had the wrong port; add a check.").is_empty()
+        );
+        assert!(!check(Style::Simplify, original).is_empty(), "unchanged, and no shorter sentences");
+
+        let invented = check(Style::Clear, "The deploy broke because port 8080 was wrong in the config. Add a check.");
+        assert_eq!(invented, ["Clear added numbers the text does not have: 8080"]);
+        let rows = "more than 10000 rows broke the deploy";
+        assert!(new_numbers(rows, "More than 10,000 rows broke the deploy.").is_empty());
+        assert_eq!(new_numbers(rows, "More than 10, 000 rows broke the deploy."), ["000", "10"], "a split number");
+        // The eval cannot tell a clean text from a missed error, so an unchanged Fix passes.
+        assert!(check(Style::Fix, original).is_empty());
+
+        // Fix and Clear may read alike: only the tones are checked apart.
+        let same = "The deploy broke because the config had the wrong port. We should add a check for it.";
+        let answers = [(Style::Clear, same.to_string()), (Style::Fix, same.to_string())];
+        assert!(Report::new(original, &answers).failures.is_empty());
     }
 
     #[test]
