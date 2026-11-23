@@ -46,6 +46,9 @@ pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> 
         let captured = Captured { text, secure_field: false, can_replace: false, from_clipboard: true };
         return Ok(Capture { captured, target: None, pid: None, strategy: Strategy::CopyOnly });
     }
+    if let Some(text) = given {
+        return Ok(service_capture(text));
+    }
     let pid = screens::frontmost_pid();
     // The hotkey can fire while Retone's own Settings window is in front (recording, testing);
     // reading or pasting into Retone itself makes no sense.
@@ -67,9 +70,6 @@ pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> 
         spike!("capture path=refused-secure-field");
         let captured = Captured { text: String::new(), secure_field: true, can_replace: false, from_clipboard: false };
         return Ok(Capture { captured, target: None, pid, strategy: Strategy::CopyOnly });
-    }
-    if let Some(text) = given {
-        return Ok(service_capture(text, target, pid, strategy));
     }
     let selection = match target.as_ref().and_then(ax::Target::selected_text) {
         Some(text) => {
@@ -100,18 +100,50 @@ pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> 
     Ok(Capture { captured: Captured { text, secure_field: false, can_replace, from_clipboard }, target, pid, strategy })
 }
 
-/// The text a Service sent. Replace stays on only when the focused field still selects that same
-/// text, so the check before Replace guards the write as after the hotkey; otherwise Copy only.
-fn service_capture(text: String, target: Option<ax::Target>, pid: Option<i32>, strategy: Strategy) -> Capture {
+/// How long the app that asked for a Service may take to come back in front.
+const SERVICE_FOCUS_WAIT: Duration = Duration::from_millis(500);
+
+/// True once an app other than Retone is in front again: `services.rs` hands activation back to
+/// the app that asked. False after `SERVICE_FOCUS_WAIT`.
+fn asking_app_in_front() -> bool {
+    let own = Some(std::process::id() as i32);
+    let start = rune_core::time::now();
+    while screens::frontmost_pid() == own {
+        if start.elapsed() > SERVICE_FOCUS_WAIT {
+            return false;
+        }
+        sleep(Duration::from_millis(10));
+    }
+    true
+}
+
+/// The text a Service sent, read from the field of the app that asked. Replace stays on only
+/// when that field still selects the same text, so the check before Replace guards the write as
+/// after the hotkey; otherwise Copy only.
+fn service_capture(text: String) -> Capture {
+    let target = asking_app_in_front().then(ax::Target::focused).flatten();
+    let pid = target.as_ref().map(|target| target.pid);
+    let bundle_id = pid.and_then(screens::bundle_id_of);
+    let overrides = rune_core::env::var("RETONE_APPLY_OVERRIDE").unwrap_or_default();
+    let strategy = strategy::for_app(bundle_id.as_deref(), &overrides);
+    if target.as_ref().is_some_and(ax::Target::is_secure) {
+        spike!("capture path=refused-secure-field");
+        let captured = Captured { text: String::new(), secure_field: true, can_replace: false, from_clipboard: false };
+        return Capture { captured, target: None, pid, strategy: Strategy::CopyOnly };
+    }
     let selected = target.as_ref().and_then(ax::Target::selected_text).filter(|s| s.trim() == text.trim());
-    spike!("capture path=service chars={} matches_selection={}", text.chars().count(), selected.is_some());
+    spike!(
+        "capture path=service app={} strategy={strategy:?} chars={} matches_selection={}",
+        bundle_id.as_deref().unwrap_or_default(),
+        text.chars().count(),
+        selected.is_some()
+    );
     match selected {
-        Some(selected) => {
-            let can_replace = strategy != Strategy::CopyOnly;
-            let captured = Captured { text: selected, secure_field: false, can_replace, from_clipboard: false };
+        Some(selected) if strategy != Strategy::CopyOnly => {
+            let captured = Captured { text: selected, secure_field: false, can_replace: true, from_clipboard: false };
             Capture { captured, target, pid, strategy }
         }
-        None => {
+        _ => {
             let captured = Captured { text, secure_field: false, can_replace: false, from_clipboard: false };
             Capture { captured, target: None, pid, strategy: Strategy::CopyOnly }
         }
