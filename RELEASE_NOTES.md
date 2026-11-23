@@ -1,3 +1,16 @@
+## Retone 0.1.0-beta.10 — 2026-11-23
+
+- VoiceOver: every help line in Settings is now read aloud with its row, including warnings and errors. Before, VoiceOver read only the row titles.
+- VoiceOver hint: when your rewrite shortcut or a style shortcut uses ⌃⌥ (for example a Hyper key), Settings now says "With VoiceOver on, press VO-Tab first." VoiceOver uses ⌃⌥ for its own commands, so press VO-Tab to pass the shortcut to Retone.
+- VoiceOver now reads the popup's rewrite area as text (it was an unknown element).
+- For developers: the CLI provider tests no longer fail at random on macOS, and they run in under a second.
+
+Tested with VoiceOver speech on: the popup reads the original text, the rewrite, the Retry, Copy and Replace buttons, and says "Rewrite ready" when a rewrite is done.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.9 — 2026-11-23
 
 - The preview highlights the changed words: removed words in the original, new words in the rewrite.
