@@ -2,6 +2,7 @@ use super::*;
 use crate::provider::{Cancel, claude, codex, opencode, pi};
 use crate::styles::Style;
 use std::os::unix::fs::PermissionsExt;
+use std::sync::OnceLock;
 
 /// A fake home and a stub CLI that records what it got into `<home>/record/`, then runs `body`.
 struct Stub {
@@ -21,18 +22,43 @@ impl Stub {
         let program = dir.path().join("cli");
         let record = home.join("record");
         let script = format!(
-            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'tool v{version}'; exit 0; fi\n\
+            "if [ \"$1\" = --version ]; then echo 'tool v{version}'; exit 0; fi\n\
              printf '%s\\n' \"$@\" > '{r}/argv'\npwd > '{r}/cwd'\nenv > '{r}/env'\ncat > '{r}/stdin'\n{body}\n",
             r = record.display()
         );
-        std::fs::write(&program, script).expect("write");
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        std::fs::write(dir.path().join("body.sh"), script).expect("write");
+        std::os::unix::fs::symlink(shared_program(), &program).expect("link");
         Stub { _dir: dir, home, program }
     }
 
     fn record(&self, name: &str) -> String {
         std::fs::read_to_string(self.home.join("record").join(name)).unwrap_or_default()
     }
+}
+
+/// The one executable behind every stub: it runs the `body.sh` next to the link it was started
+/// from. macOS Gatekeeper scans each new executable on its first run, with a network lookup that
+/// can take seconds; one new script per test sometimes passed the 5 s version deadline. This
+/// file keeps its content across runs, and its first run here takes the scan before any test's
+/// deadline starts.
+fn shared_program() -> &'static Path {
+    static PROGRAM: OnceLock<PathBuf> = OnceLock::new();
+    PROGRAM.get_or_init(|| {
+        let program = std::env::temp_dir().join("retone-test-stub");
+        let script = "#!/bin/sh\n. \"$(dirname \"$0\")/body.sh\"\n";
+        if std::fs::read_to_string(&program).ok().as_deref() != Some(script) {
+            // Write and rename, so another test process never runs a half-written file.
+            let staged = std::env::temp_dir().join(format!("retone-test-stub-{}", std::process::id()));
+            std::fs::write(&staged, script).expect("write");
+            std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+            std::fs::rename(&staged, &program).expect("rename");
+        }
+        let warm = WorkDir::new().expect("dir");
+        std::fs::write(warm.path().join("body.sh"), "").expect("write");
+        std::os::unix::fs::symlink(&program, warm.path().join("cli")).expect("link");
+        std::process::Command::new(warm.path().join("cli")).status().expect("warm-up run");
+        program
+    })
 }
 
 const SECRET: &str = "the meeting are moved to tuesday";
@@ -189,17 +215,10 @@ fn an_unverified_version_is_refused_before_any_request() {
 
 #[test]
 fn a_cli_that_writes_into_its_data_folder_is_reported_and_nothing_is_deleted() {
-    let stub = Stub::new("1.5.2", "echo session > \"$HOME/.pi/agent/sessions/new.jsonl\"; echo ok");
-    // The stub reads $HOME from the real environment; point it at the fake home for this run.
-    let program = stub.program.clone();
-    let wrapper = stub.home.join("wrapper");
-    std::fs::write(
-        &wrapper,
-        format!("#!/bin/sh\nHOME='{}' exec '{}' \"$@\"\n", stub.home.display(), program.display()),
-    )
-    .expect("wrapper");
-    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-    let out = pi::rewrite(pi::VERIFIED, &wrapper, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    // The fake home sits next to the stub link. A wrapper that set HOME would be one more new
+    // executable for Gatekeeper to scan (see `shared_program`).
+    let stub = Stub::new("1.5.2", "echo session > \"$(dirname \"$0\")/home/.pi/agent/sessions/new.jsonl\"; echo ok");
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out.answer, Ok("ok".into()), "the result still shows");
     assert_eq!(out.wrote_files, Some(stub.home.join(".pi/agent/sessions")));
     assert!(stub.home.join(".pi/agent/sessions/new.jsonl").exists(), "Retone never deletes CLI files");
