@@ -267,10 +267,11 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         .on_change(|s: &mut SettingsUi, next, _: &mut Tx| s.change_hotkey(next))
         .error_message(recorder_message(s))
         .build(k);
-    let shortcut_help = if s.recorder.shortcut().is_none() {
-        t!("settings.shortcut.help_unset")
-    } else {
-        t!("settings.shortcut.help_set")
+    let shortcut_help = match s.recorder.shortcut().map(|chord| chord.modifiers()) {
+        None => t!("settings.shortcut.help_unset"),
+        // ⌃⌥ is the VoiceOver key, so with VoiceOver on such a chord never reaches Retone.
+        Some(mods) if mods.ctrl && mods.alt => t!("settings.shortcut.help_voiceover"),
+        Some(_) => t!("settings.shortcut.help_set"),
     };
     let test_help = match s.hotkey_test {
         HotkeyTest::Idle => help(k, t!("settings.test.idle")),
