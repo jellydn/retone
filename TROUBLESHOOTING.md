@@ -50,6 +50,15 @@ Retone saves the clipboard before it copies or pastes, and puts it back afterwar
 - Open **Settings → Shortcut** and record the hotkey again. Retone shows which app holds a chord when macOS tells it.
 - The hotkey does nothing while Retone's own window is in front.
 
+## The Retone items are missing from the right-click menu
+
+The items are macOS Services, so they show only in apps that support Services: most native apps, Safari and Chrome. Many Electron apps (Slack, VS Code, Discord) do not show them; use your hotkey there.
+
+- macOS shows a few matching Services directly in the context menu and puts the rest under **Services ›**.
+- Turn the items on or off in **System Settings → Keyboard → Keyboard Shortcuts → Services → Text**.
+- After you install or move Retone, the list can take a moment to update. Log out and in, or run `/System/Library/CoreServices/pbs -update`.
+- Without Accessibility, the items still work, but the popup offers only Copy.
+
 ## Homebrew
 
 - `Error: Refusing to load cask jellydn/retone/retone from untrusted tap`: run `brew trust --cask jellydn/retone/retone` (note the full name, `jellydn/retone/retone`), then install again. If you trusted a misspelled name, list your entries with `brew trust --json v1` and remove the wrong one, for example `brew untrust --cask jellydn/retone/reton` or `brew untrust --tap jellydn/reton`. If `brew trust` is unknown, run `brew update` first.

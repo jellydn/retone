@@ -31,8 +31,15 @@ pub fn has_permissions() -> bool {
     ax::is_trusted() && events::can_post_events()
 }
 
-pub fn capture(board: &Board) -> Result<Capture, String> {
+pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> {
     if !has_permissions() {
+        if let Some(text) = given {
+            // A Service gave the text, but without Accessibility Retone cannot check the field
+            // again before a write: Copy only.
+            spike!("capture path=service-no-access chars={}", text.chars().count());
+            let captured = Captured { text, secure_field: false, can_replace: false, from_clipboard: false };
+            return Ok(Capture { captured, target: None, pid: None, strategy: Strategy::CopyOnly });
+        }
         // The user copied the text themselves; Retone only reads it and never pastes.
         let text = board.text().unwrap_or_default();
         spike!("capture path=clipboard-only chars={}", text.chars().count());
@@ -61,6 +68,9 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
         let captured = Captured { text: String::new(), secure_field: true, can_replace: false, from_clipboard: false };
         return Ok(Capture { captured, target: None, pid, strategy: Strategy::CopyOnly });
     }
+    if let Some(text) = given {
+        return Ok(service_capture(text, target, pid, strategy));
+    }
     let selection = match target.as_ref().and_then(ax::Target::selected_text) {
         Some(text) => {
             spike!("capture path=ax chars={} newlines={}", text.chars().count(), text.matches('\n').count());
@@ -88,6 +98,24 @@ pub fn capture(board: &Board) -> Result<Capture, String> {
     // not Copy only.
     let can_replace = target.is_some() && !from_clipboard && strategy != Strategy::CopyOnly;
     Ok(Capture { captured: Captured { text, secure_field: false, can_replace, from_clipboard }, target, pid, strategy })
+}
+
+/// The text a Service sent. Replace stays on only when the focused field still selects that same
+/// text, so the check before Replace guards the write as after the hotkey; otherwise Copy only.
+fn service_capture(text: String, target: Option<ax::Target>, pid: Option<i32>, strategy: Strategy) -> Capture {
+    let selected = target.as_ref().and_then(ax::Target::selected_text).filter(|s| s.trim() == text.trim());
+    spike!("capture path=service chars={} matches_selection={}", text.chars().count(), selected.is_some());
+    match selected {
+        Some(selected) => {
+            let can_replace = strategy != Strategy::CopyOnly;
+            let captured = Captured { text: selected, secure_field: false, can_replace, from_clipboard: false };
+            Capture { captured, target, pid, strategy }
+        }
+        None => {
+            let captured = Captured { text, secure_field: false, can_replace: false, from_clipboard: false };
+            Capture { captured, target: None, pid, strategy: Strategy::CopyOnly }
+        }
+    }
 }
 
 /// The selection when there is one; otherwise the clipboard, read only then. True when the text

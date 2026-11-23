@@ -70,6 +70,7 @@
   "popup.note.clipboard_only": "Accessibility is off, so Retone used the clipboard, not the selection. Grant it in Settings.",
   "popup.note.copy_only": "Retone cannot replace text in this app or field, so only Copy is offered.",
   "popup.note.from_clipboard": "Nothing was selected, so Retone used the clipboard text. Only Copy is offered.",
+  "popup.note.from_service": "Retone cannot check this field again before a write, so only Copy is offered. With Accessibility on, Replace works when the text is still selected.",
   "popup.note.streaming": "Still writing… Copy and Replace turn on when the answer is complete.",
   "popup.ok": "OK",
   "popup.open_settings": "Open Settings",

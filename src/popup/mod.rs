@@ -32,6 +32,10 @@ pub struct Popup {
     pub clipboard_only: bool,
     /// The last capture used the clipboard, because nothing was selected or Accessibility is off.
     pub from_clipboard: bool,
+    /// The popup opened from a Services menu item, which sent the text itself.
+    pub from_service: bool,
+    /// The text that Service sent, until the capture takes it.
+    given: Option<String>,
     /// Set after the runtime guard saw a CLI write files; shown above the kept result.
     pub adapter_warning: Option<String>,
     /// The provider list, open over the current state (⌘P or a click on the header label).
@@ -84,6 +88,8 @@ impl Default for Popup {
             provider_problem: None,
             clipboard_only: false,
             from_clipboard: false,
+            from_service: false,
+            given: None,
             adapter_warning: None,
             picker: None,
             request: Latest::default(),
@@ -118,15 +124,24 @@ impl Popup {
 
     /// The user's global shortcut, or the menu item Rewrite Selection.
     pub fn on_hotkey(&mut self, tx: &mut Tx) {
-        self.open(None, tx);
+        self.open(None, None, tx);
     }
 
     /// A style's own shortcut: the same as the main one, but the rewrite starts in that style.
     pub fn on_style_hotkey(&mut self, index: usize, tx: &mut Tx) {
-        self.open(Some(index), tx);
+        self.open(Some(index), None, tx);
     }
 
-    fn open(&mut self, style: Option<usize>, tx: &mut Tx) {
+    /// A Services menu item: the popup opens in its style with the text the Service sent.
+    pub fn on_service(&mut self, style_id: &str, text: String, tx: &mut Tx) {
+        let index = crate::styles::PRESETS.iter().position(|style| style.id() == style_id);
+        self.open(index, Some(text), tx);
+    }
+
+    fn open(&mut self, style: Option<usize>, given: Option<String>, tx: &mut Tx) {
+        // Set first, so text from an earlier Service never reaches a later hotkey capture.
+        self.from_service = given.is_some();
+        self.given = given;
         let Some(links) = self.links.as_ref() else { return };
         if links.shared.take_testing() {
             links.settings.update(|settings, _| settings.hotkey_tested());
@@ -346,7 +361,7 @@ impl Popup {
     #[cfg(target_os = "macos")]
     fn capture(&mut self, attempt: Attempt) {
         if let Some(native) = self.links.as_ref().and_then(|links| links.native.as_ref()) {
-            native.send(crate::native::Command::Capture(attempt));
+            native.send(crate::native::Command::Capture { attempt, given: self.given.take() });
         }
     }
 

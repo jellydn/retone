@@ -251,7 +251,9 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
     if let Some(error) = &p.flow.apply_error {
         notes.push(t!("popup.replace_failed", error = error));
     } else if ready && !can_replace {
-        notes.push(if p.clipboard_only {
+        notes.push(if p.from_service {
+            t!("popup.note.from_service").to_string()
+        } else if p.clipboard_only {
             t!("popup.note.clipboard_only").to_string()
         } else if p.from_clipboard {
             t!("popup.note.from_clipboard").to_string()
