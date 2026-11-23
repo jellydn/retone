@@ -51,6 +51,8 @@ pub fn setting(
     control: El,
 ) -> El {
     let described = help.is_some();
+    // The drawn help line is hidden from the tree; a reader hears it as the row's description.
+    let description = help.as_ref().map(|(body, _)| body.clone()).unwrap_or_default();
     let copy = col()
         .key("copy")
         .grow(1.0)
@@ -70,6 +72,7 @@ pub fn setting(
         .gap(12.0)
         .center_y()
         .label(title.to_string())
+        .description(description)
         .child(icon(glyph, 16.0).key("icon").color(k.c.icon_base).a11y_hidden())
         .child(copy)
         .child(control)
