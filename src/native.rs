@@ -9,8 +9,12 @@ use crate::flow::Captured;
 use crate::mac::pasteboard::Board;
 use crate::placement::Rect;
 use rune::machine::Attempt;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::thread;
+use std::time::Duration;
+
+/// How often the worker checks for a late ⌘C while one is pending.
+const LATE_COPY_POLL: Duration = Duration::from_millis(50);
 
 pub enum Command {
     /// `given` is the text a Service sent: Retone then reads no selection and no clipboard.
@@ -43,11 +47,29 @@ impl Native {
         thread::Builder::new().name("retone-native".into()).spawn(move || {
             let board = Board::general();
             let mut current: Option<Capture> = None;
-            for command in receive {
+            let mut late: Option<capture::LateCopy> = None;
+            loop {
+                let command = if late.is_some() {
+                    match receive.recv_timeout(LATE_COPY_POLL) {
+                        Ok(command) => Some(command),
+                        Err(RecvTimeoutError::Timeout) => None,
+                        Err(RecvTimeoutError::Disconnected) => break,
+                    }
+                } else {
+                    match receive.recv() {
+                        Ok(command) => Some(command),
+                        Err(_) => break,
+                    }
+                };
+                late = late.and_then(|pending| pending.check(&board));
+                let Some(command) = command else { continue };
+                // A new command takes the pasteboard over; a copy that has not landed by now is
+                // no longer watched.
+                late = None;
                 match command {
                     Command::Capture { attempt, given } => {
                         current = None;
-                        let reply = match capture::capture(&board, given) {
+                        let reply = match capture::capture(&board, given, &mut late) {
                             Ok(capture) => {
                                 let caret = capture.target.as_ref().and_then(|target| target.caret_bounds());
                                 let captured = capture.captured.clone();

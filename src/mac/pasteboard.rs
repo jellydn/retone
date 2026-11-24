@@ -143,4 +143,4 @@ impl Drop for Board {
 
 #[cfg(test)]
 #[path = "pasteboard_tests.rs"]
-mod tests;
+pub(crate) mod tests;
