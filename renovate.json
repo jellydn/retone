@@ -11,6 +11,7 @@
         "rune",
         "rune-kit",
         "rune-core",
+        "rune-i18n",
         "winit",
         "sctk-adwaita",
         "parley_engine",

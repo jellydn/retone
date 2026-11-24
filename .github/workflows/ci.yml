@@ -18,6 +18,13 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Renovate bumps the Rune dependencies but not [patch.crates-io]; a split once broke main (#22).
+      - name: One Rune revision in Cargo.toml
+        run: |
+          # Inline tables, in any key order; comment lines do not count.
+          revs=$(grep -v '^[[:space:]]*#' Cargo.toml | grep 'anomalyco/rune' | grep -o 'rev = "[0-9a-f]*"' | sort | uniq -c)
+          echo "$revs"
+          test "$(echo "$revs" | grep -c .)" -eq 1
       - name: Install pinned Rust
         run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
