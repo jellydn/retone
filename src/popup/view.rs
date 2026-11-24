@@ -261,6 +261,11 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
             t!("popup.note.copy_only").to_string()
         });
     }
+    if let Phase::Ready(rewrite) = phase
+        && style.too_long(original, rewrite)
+    {
+        notes.push(t!("popup.note.too_long").to_string());
+    }
     if matches!(phase, Phase::Streaming(_)) {
         notes.push(t!("popup.note.streaming").to_string());
     }

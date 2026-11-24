@@ -77,6 +77,14 @@ impl Style {
         matches!(self, Style::Summarize | Style::Expand)
     }
 
+    /// Expand may use at most twice the words of the text. Models do not always keep to the
+    /// prompt's cap, so the preview says so and the user can retry; the answer is never cut,
+    /// because a cut would end mid-sentence.
+    pub fn too_long(&self, original: &str, answer: &str) -> bool {
+        let words = |text: &str| text.split_whitespace().count();
+        *self == Style::Expand && words(answer) > 2 * words(original)
+    }
+
     /// False for the styles that must change the length or the form of the text, so the rules
     /// "keep every fact" and "keep the kind of text" cannot apply to them.
     fn keeps_content(&self) -> bool {
@@ -329,6 +337,14 @@ mod tests {
         assert!(custom.example.is_none(), "no example could show a custom style");
         let single = build_single(&Style::Concise, "the text");
         assert!(single.contains("Example:") && single.ends_with("<text>\nthe text\n</text>"), "{single}");
+    }
+
+    #[test]
+    fn only_an_expansion_past_twice_the_words_is_too_long() {
+        let original = "one two three";
+        assert!(!Style::Expand.too_long(original, "a b c d e f"), "exactly twice is allowed");
+        assert!(Style::Expand.too_long(original, "a b c d e f g"));
+        assert!(!Style::Clear.too_long(original, "a b c d e f g"), "other styles have no cap");
     }
 
     #[test]
