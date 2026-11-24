@@ -3064,7 +3064,7 @@ dependencies = [
 [[package]]
 name = "rune-i18n"
 version = "0.1.0"
-source = "git+https://github.com/anomalyco/rune?rev=3f0d9973526818bae62c89c483fbd144a2a19669#3f0d9973526818bae62c89c483fbd144a2a19669"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
