@@ -136,6 +136,11 @@ impl Flow {
         Self { state: State::Idle, default_style, apply_error: None, seq: Seq::default(), can_replace: false }
     }
 
+    /// Only these states start a new attempt; every other state ignores `Event::Hotkey`.
+    pub fn accepts_hotkey(&self) -> bool {
+        matches!(self.state, State::Idle | State::Notice(_))
+    }
+
     pub fn step(&mut self, event: Event) -> Effects<Effect> {
         use Effect::*;
         let state = std::mem::replace(&mut self.state, State::Idle);
