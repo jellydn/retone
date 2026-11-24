@@ -15,6 +15,18 @@ pub enum Style {
 pub const PRESETS: [Style; 4] = [Style::Clear, Style::Concise, Style::Professional, Style::Technical];
 
 impl Style {
+    /// The key prefs save for this style. Never change one: a saved default or shortcut would
+    /// move to another style.
+    pub fn id(&self) -> &'static str {
+        match self {
+            Style::Clear => "clear",
+            Style::Concise => "concise",
+            Style::Professional => "professional",
+            Style::Technical => "technical",
+            Style::Custom(_) => "custom",
+        }
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Style::Clear => t!("style.clear"),

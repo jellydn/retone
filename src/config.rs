@@ -3,9 +3,10 @@
 #![forbid(unsafe_code)]
 
 use crate::provider::{Kind, Provider, cli, local};
-use crate::styles::Style;
+use crate::styles::{PRESETS, Style};
 use crate::theme::Theme;
 use rune_core::prefs::Prefs;
+use serde_json::Value;
 
 /// Release and dev builds keep separate prefs folders, as they have separate bundle IDs.
 pub const APP_ID: &str =
@@ -16,10 +17,10 @@ pub struct Config {
     /// Rune accelerator string, such as `alt+super+r`. None until the user records one.
     pub hotkey: Option<String>,
     /// Optional shortcuts that open the popup in one style, by style index (the presets, then
-    /// Custom), as `default_style` counts. Missing entries are None.
+    /// Custom), as `default_style` counts. Missing entries are None. Prefs save them by style id.
     pub style_hotkeys: Vec<Option<String>>,
     pub theme: Theme,
-    /// Index into the presets, or `PRESETS.len()` for the custom style.
+    /// Index into the presets, or `PRESETS.len()` for the custom style. Prefs save the style id.
     pub default_style: usize,
     pub custom_style: String,
     pub provider: Option<Kind>,
@@ -38,9 +39,9 @@ impl Config {
         let text = |key: &str| prefs.get::<String>(key).unwrap_or_default();
         Config {
             hotkey: prefs.get("hotkey"),
-            style_hotkeys: prefs.get("style_hotkeys").unwrap_or_default(),
+            style_hotkeys: load_style_hotkeys(prefs.get("style_hotkeys")),
             theme: prefs.get("theme").unwrap_or_default(),
-            default_style: prefs.get("default_style").unwrap_or(0),
+            default_style: load_default_style(prefs.get("default_style")),
             custom_style: text("custom_style"),
             provider: prefs.get("provider"),
             local_endpoint: prefs.get("local_endpoint").unwrap_or_else(|| local::OLLAMA.to_string()),
@@ -57,9 +58,9 @@ impl Config {
         let save = |prefs: &mut Prefs, key: &str, value: &serde_json::Value| prefs.set(key, value);
         let fields = [
             ("hotkey", serde_json::json!(self.hotkey)),
-            ("style_hotkeys", serde_json::json!(self.style_hotkeys)),
+            ("style_hotkeys", save_style_hotkeys(&self.style_hotkeys)),
             ("theme", serde_json::json!(self.theme)),
-            ("default_style", serde_json::json!(self.default_style)),
+            ("default_style", serde_json::json!(slot_id(self.default_style))),
             ("custom_style", serde_json::json!(self.custom_style)),
             ("provider", serde_json::json!(self.provider)),
             ("local_endpoint", serde_json::json!(self.local_endpoint)),
@@ -169,6 +170,50 @@ fn exact_model(model: &str, name: &str) -> Result<String, String> {
     Ok(model.to_string())
 }
 
+/// The style slots in the order 0.1.0-beta.10 and earlier saved them, by number. Frozen, so old
+/// prefs keep their choices after new presets change the slot order.
+const LEGACY_SLOT_IDS: [&str; 5] = ["clear", "concise", "professional", "technical", "custom"];
+
+/// The id of the style slot at `index`: a preset, or Custom past the presets.
+fn slot_id(index: usize) -> &'static str {
+    PRESETS.get(index).map_or("custom", Style::id)
+}
+
+/// The slot index for a saved style id or, from older prefs, a saved slot number.
+fn slot_index(saved: &Value) -> Option<usize> {
+    let id = match saved {
+        Value::String(id) => id.as_str(),
+        Value::Number(number) => *LEGACY_SLOT_IDS.get(usize::try_from(number.as_u64()?).ok()?)?,
+        _ => return None,
+    };
+    (0..=PRESETS.len()).find(|&index| slot_id(index) == id)
+}
+
+fn load_default_style(saved: Option<Value>) -> usize {
+    saved.as_ref().and_then(slot_index).unwrap_or(0)
+}
+
+/// Shortcuts are saved as `{ "concise": "ctrl+alt+2" }`; older prefs saved a list by slot number.
+fn load_style_hotkeys(saved: Option<Value>) -> Vec<Option<String>> {
+    let entries: Vec<(Value, Value)> = match saved {
+        Some(Value::Object(map)) => map.into_iter().map(|(id, chord)| (Value::String(id), chord)).collect(),
+        Some(Value::Array(list)) => list.into_iter().enumerate().map(|(i, chord)| (Value::from(i), chord)).collect(),
+        _ => Vec::new(),
+    };
+    let mut hotkeys = vec![None; PRESETS.len() + 1];
+    for (slot, chord) in entries {
+        if let (Some(index), Value::String(chord)) = (slot_index(&slot), chord) {
+            hotkeys[index] = Some(chord);
+        }
+    }
+    hotkeys
+}
+
+fn save_style_hotkeys(hotkeys: &[Option<String>]) -> Value {
+    let saved = hotkeys.iter().enumerate().filter_map(|(index, chord)| Some((slot_id(index), chord.as_ref()?)));
+    Value::Object(saved.map(|(id, chord)| (id.to_string(), Value::from(chord.as_str()))).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,11 +230,15 @@ mod tests {
     #[test]
     fn settings_survive_a_save_and_load() {
         let mut prefs = Prefs::memory();
+        let custom = PRESETS.len();
+        let mut style_hotkeys = vec![None; custom + 1];
+        style_hotkeys[1] = Some("ctrl+alt+2".into());
+        style_hotkeys[custom] = Some("ctrl+alt+9".into());
         let config = Config {
             hotkey: Some("alt+super+r".into()),
-            style_hotkeys: vec![None, Some("ctrl+alt+2".into())],
+            style_hotkeys,
             theme: Theme::KanagawaLotus,
-            default_style: 4,
+            default_style: custom,
             custom_style: "Make it friendly.".into(),
             provider: Some(Kind::OpenCode),
             opencode_model: "opencode/beam-free".into(),
@@ -201,6 +250,32 @@ mod tests {
         assert_eq!(loaded.style(), Style::Custom("Make it friendly.".into()));
         assert_eq!(loaded.style_at(1), Style::Concise);
         assert_eq!(loaded.provider(), Ok(Provider::OpenCode { model: "opencode/beam-free".into() }));
+        // Saved by id, so a preset added later cannot take over the custom slot.
+        assert_eq!(prefs.get::<Value>("default_style"), Some(Value::from("custom")));
+        assert_eq!(
+            prefs.get::<Value>("style_hotkeys"),
+            Some(serde_json::json!({ "concise": "ctrl+alt+2", "custom": "ctrl+alt+9" }))
+        );
+    }
+
+    #[test]
+    fn prefs_from_beta_10_keep_their_style_choices() {
+        let mut prefs = Prefs::memory();
+        prefs.set("default_style", &4).expect("set");
+        prefs.set("style_hotkeys", &serde_json::json!([null, "ctrl+alt+2", null, null, "ctrl+alt+5"])).expect("set");
+        prefs.set("custom_style", "Make it friendly.").expect("set");
+        let config = Config::load(&prefs);
+        assert_eq!(config.style(), Style::Custom("Make it friendly.".into()));
+        let chord = |id: &str| slot_index(&Value::from(id)).and_then(|i| config.style_hotkeys[i].clone());
+        assert_eq!(chord("concise").as_deref(), Some("ctrl+alt+2"));
+        assert_eq!(chord("custom").as_deref(), Some("ctrl+alt+5"));
+        assert_eq!(config.style_hotkeys.iter().flatten().count(), 2);
+
+        // An unknown id or a number past the old slots falls back instead of failing the load.
+        prefs.set("default_style", "gone").expect("set");
+        assert_eq!(Config::load(&prefs).default_style, 0);
+        prefs.set("default_style", &9).expect("set");
+        assert_eq!(Config::load(&prefs).default_style, 0);
     }
 
     #[test]
