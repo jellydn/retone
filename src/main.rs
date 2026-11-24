@@ -115,6 +115,7 @@ fn start_native(popup: &rune::AppHandle<Popup>, settings: &rune::AppHandle<Setti
             updates::UpdateChannel::Manual
         };
         settings.update(move |ui, _| ui.update_channel = channel);
+        mac::services::install(popup.clone());
         mac::status::install(popup, settings, channel);
     });
 }

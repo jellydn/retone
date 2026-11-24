@@ -5,7 +5,7 @@
 
 use crate::placement::{Rect, Screen, from_appkit};
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSEvent, NSScreen, NSWorkspace};
+use objc2_app_kit::{NSEvent, NSRunningApplication, NSScreen, NSWorkspace};
 use objc2_foundation::NSRect;
 
 fn rect(r: NSRect) -> Rect {
@@ -35,6 +35,11 @@ pub fn mouse_anchor(mtm: MainThreadMarker) -> Rect {
 /// The bundle ID of the app in front, for the spike log.
 pub fn frontmost_bundle_id() -> Option<String> {
     Some(NSWorkspace::sharedWorkspace().frontmostApplication()?.bundleIdentifier()?.to_string())
+}
+
+/// The bundle ID of the app with this pid.
+pub fn bundle_id_of(pid: i32) -> Option<String> {
+    Some(NSRunningApplication::runningApplicationWithProcessIdentifier(pid)?.bundleIdentifier()?.to_string())
 }
 
 /// The pid of the app in front, where the hotkey was pressed.

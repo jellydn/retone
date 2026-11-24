@@ -13,7 +13,11 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread;
 
 pub enum Command {
-    Capture(Attempt),
+    /// `given` is the text a Service sent: Retone then reads no selection and no clipboard.
+    Capture {
+        attempt: Attempt,
+        given: Option<String>,
+    },
     Replace {
         attempt: Attempt,
         text: String,
@@ -41,9 +45,9 @@ impl Native {
             let mut current: Option<Capture> = None;
             for command in receive {
                 match command {
-                    Command::Capture(attempt) => {
+                    Command::Capture { attempt, given } => {
                         current = None;
-                        let reply = match capture::capture(&board) {
+                        let reply = match capture::capture(&board, given) {
                             Ok(capture) => {
                                 let caret = capture.target.as_ref().and_then(|target| target.caret_bounds());
                                 let captured = capture.captured.clone();

@@ -53,6 +53,30 @@ if $release && [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
   <key>SUScheduledCheckInterval</key><integer>86400</integer>"
 fi
 
+# Services menu items (src/mac/services.rs): each sends the selection to Retone, which opens its
+# popup in that style. No NSReturnTypes, so the asking app never changes from here, and no
+# NSKeyEquivalent: Retone has no default shortcut. NSRequiredContext must be present, or macOS
+# registers the item but does not show it.
+service() {
+  cat <<SERVICE
+    <dict>
+      <key>NSMenuItem</key><dict><key>default</key><string>Retone: $1</string></dict>
+      <key>NSMessage</key><string>rewriteSelection</string>
+      <key>NSUserData</key><string>$2</string>
+      <key>NSPortName</key><string>$name</string>
+      <key>NSSendTypes</key><array><string>NSStringPboardType</string><string>public.utf8-plain-text</string></array>
+      <key>NSRequiredContext</key><dict/>
+    </dict>
+SERVICE
+}
+services="  <key>NSServices</key>
+  <array>
+$(service "Fix Spelling and Grammar" fix)
+$(service "Improve Writing" clear)
+$(service "Summarize" summarize)
+$(service "Bullet Points" bullets)
+  </array>"
+
 app="$out/$name.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
@@ -75,6 +99,7 @@ cat > "$app/Contents/Info.plist" <<EOF
   <!-- Menu-bar app: no Dock icon, no menu bar of its own. -->
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+$services
 $sparkle_keys
 </dict>
 </plist>
