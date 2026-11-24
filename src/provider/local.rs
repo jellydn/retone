@@ -265,7 +265,7 @@ fn messages(prompt: &styles::Prompt) -> Value {
 }
 
 /// The server's own message is short and names the model problem (llama-server: "Loading model"
-/// while it starts); it never echoes the text for these errors, and the caller redacts it anyway.
+/// while it starts); it should not echo the text, and `Provider::rewrite` redacts it anyway.
 fn status_message(status: ureq::http::StatusCode, body: &Value) -> String {
     if status.as_u16() == 401 {
         return t!("local.unauthorized").into();

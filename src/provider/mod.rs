@@ -96,15 +96,10 @@ impl Provider {
     /// provider streams; `on_partial` gets its text so far. CLI answers arrive whole.
     pub fn rewrite(&self, style: &Style, text: &str, cancel: &Cancel, env: &Env, on_partial: &dyn Fn(&str)) -> Outcome {
         match self {
-            Provider::Local { endpoint, model } => Outcome::answer(local::rewrite(
-                endpoint,
-                model,
-                env.local_api_key.as_ref(),
-                style,
-                text,
-                cancel,
-                on_partial,
-            )),
+            Provider::Local { endpoint, model } => Outcome::answer(
+                local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text, cancel, on_partial)
+                    .map_err(|error| redact(&error, text, env.home.to_str())),
+            ),
             Provider::Pi { model } => pi::rewrite(pi::VERIFIED, &env.pi_program, model, style, text, cancel, &env.home),
             Provider::OpenCode { model } => {
                 opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, style, text, cancel, &env.home)
