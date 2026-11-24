@@ -139,14 +139,19 @@ impl Popup {
     }
 
     fn open(&mut self, style: Option<usize>, given: Option<String>, tx: &mut Tx) {
-        // Set first, so text from an earlier Service never reaches a later hotkey capture.
-        self.from_service = given.is_some();
-        self.given = given;
         let Some(links) = self.links.as_ref() else { return };
         if links.shared.take_testing() {
             links.settings.update(|settings, _| settings.hotkey_tested());
             return;
         }
+        // The visible popup is busy: ignore the request, so it cannot change the style,
+        // the given text or the Services note of the attempt in progress.
+        if !self.flow.accepts_hotkey() {
+            return;
+        }
+        // Set before the capture, so text from an earlier Service never reaches a later hotkey capture.
+        self.from_service = given.is_some();
+        self.given = given;
         self.config = links.shared.config();
         let checked = self.config.provider().and_then(|provider| {
             match consent::disabled_reason(&links.shared.prefs(), provider.kind()) {
