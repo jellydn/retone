@@ -44,6 +44,16 @@ pub const SCENES: &[Scene] = &[
             *style = Style::Summarize;
         }
     }),
+    // An expansion past twice the words: the note asks for a retry; the answer is not cut.
+    ("expand-too-long-example", |p| {
+        let long = "Hi team, I would like to let you know that the meeting has now been moved to Tuesday, because \
+                    of a few reasons that came up this week. So, please take a moment to update your calendars, \
+                    so that everyone is in the right place at the right time, and nobody misses it. Thank you all.";
+        previewing(p, Phase::Ready(long.into()), true);
+        if let State::Previewing { style, .. } = &mut p.flow.state {
+            *style = Style::Expand;
+        }
+    }),
     ("bullets-example", |p| {
         previewing(p, Phase::Ready("- The meeting moved to Tuesday.\n- Please update your calendars.".into()), true);
         if let State::Previewing { style, .. } = &mut p.flow.state {
