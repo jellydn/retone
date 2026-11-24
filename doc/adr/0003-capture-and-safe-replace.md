@@ -21,3 +21,4 @@ Users must be able to trust that Retone never edits the wrong text and never los
 ## Consequences
 
 - Some apps refuse a replace that would have worked; the user can still copy the rewrite with ⌘C.
+- The ⌘C capture fallback is written to the pasteboard by the target app, without the transient markers, so a clipboard manager can keep the selection in its history. The README says so; Retone cannot prevent it except by not posting ⌘C.

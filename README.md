@@ -148,6 +148,8 @@ Retone asks for consent the first time it sends text to a provider and model, an
 | Claude Code | `claude -p --no-session-persistence` with tools, MCP servers, hooks and skills off, and prompt history skipped. Your user settings stay loaded for the API address and login. Tested with Claude Code 2.1.66.                                                                                                                                      |
 | Codex       | `codex exec --ephemeral` in a read-only sandbox, without your `config.toml`, with the shell, memories, plugins and browser off. Codex keeps its state in a private temporary folder that Retone deletes after the run; only your `auth.json` is copied in. **Not verified yet**: Retone refuses it until the no-history check passes.              |
 
+**Clipboard managers:** Retone reads the selection through Accessibility first. When an app does not offer it, Retone asks the app to copy it (⌘C), then puts your clipboard back. The app writes that copy, not Retone, so Retone cannot mark it as transient, and a clipboard manager can save it in its history. Retone's own paste for Replace is marked transient, so clipboard managers skip it. To keep such text out of a clipboard manager's history, pause the manager or exclude the app in it.
+
 ### Choosing a local model
 
 Use a 3B model or larger, such as `qwen2.5:3b` (about 2 GB). In Retone's style eval (`retone --eval-styles`), `qwen2.5:0.5b` often gave almost the same text for every style, did not shorten text for Concise, and sometimes dropped facts. `qwen2.5:3b` and `qwen2.5:7b` passed every check through Ollama and llama.cpp.
