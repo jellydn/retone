@@ -15,13 +15,18 @@ concurrency:
 jobs:
   release:
     runs-on: macos-26
+    timeout-minutes: 60
     env:
       # Repo variable (public key) and secret (private key). Without them the release has no
       # automatic updates; Sparkle is not embedded rather than embedded without verification.
+      # Only the last step gets the private key: build scripts and proc macros run in the others.
       SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
-      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
     steps:
+      # No token in .git/config while dependencies build; the last step pushes with its own.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Install pinned Rust
         run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -29,7 +34,7 @@ jobs:
       - run: cargo clippy --locked --all-targets
       - run: cargo test --locked
       - name: Fetch Sparkle (only with a key)
-        if: env.SPARKLE_PUBLIC_KEY != '' && env.SPARKLE_PRIVATE_KEY != ''
+        if: env.SPARKLE_PUBLIC_KEY != '' && env.HAS_SPARKLE_KEY == 'true'
         run: |
           # A separate assignment, so a failed download or checksum fails this step.
           tools=$(sh scripts/sparkle-tools.sh)
@@ -62,6 +67,9 @@ jobs:
             target/release/assets/*.zip
             target/release/assets/SHA256SUMS
       - name: Update cask and appcast on main
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           git fetch origin main
@@ -74,4 +82,4 @@ jobs:
           if [ -f appcast.xml ]; then git add appcast.xml; fi
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "chore: update cask and appcast for v$version [skip ci]"
-          git push origin main
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main
