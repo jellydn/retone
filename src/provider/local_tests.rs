@@ -147,6 +147,25 @@ fn server_errors_and_runaway_answers_are_failures() {
 }
 
 #[test]
+fn a_server_error_that_echoes_the_text_is_redacted() {
+    let selected = "the meeting are moved";
+    let echo = format!("bad request: {selected} (log in /Users/ana/.cache)");
+    let (endpoint, _) = stub("400 Bad Request", &serde_json::json!({ "error": { "message": echo } }).to_string());
+    let env = crate::provider::Env {
+        home: "/Users/ana".into(),
+        pi_program: "pi".into(),
+        opencode_program: "opencode".into(),
+        claude_program: "claude".into(),
+        codex_program: "codex".into(),
+        local_api_key: None,
+    };
+    let provider = crate::provider::Provider::Local { endpoint, model: "m".into() };
+    let error = provider.rewrite(&Style::Clear, selected, &Cancel::default(), &env, &|_| {}).answer.unwrap_err();
+    assert!(!error.contains(selected) && !error.contains("/Users/ana"), "{error}");
+    assert!(error.contains("400 Bad Request"), "{error}");
+}
+
+#[test]
 fn models_are_listed_by_exact_id() {
     let (endpoint, request) =
         stub("200 OK", r#"{"object":"list","data":[{"id":"qwen2.5:0.5b"},{"id":"inkling-2-mini"}]}"#);
