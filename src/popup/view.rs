@@ -4,11 +4,11 @@ use super::Popup;
 use crate::config::Config;
 use crate::flow::{Event, Notice, Phase, State};
 use crate::provider::consent;
-use crate::styles::{PRESETS, Style};
+use crate::styles::{PRESETS, Style, TONES};
 use rune::{Cx, El, LiveRegion, ScrollSpec, Span, Tx, col, el, row, spacer, text};
-use rune_kit::{Button, ButtonVariant, Kit, List, ListItem, Spinner};
+use rune_kit::{Button, ButtonVariant, ControlSize, Kit, List, ListItem, Spinner};
 
-/// The styles the picker offers, in key order 1–5: the presets, then Custom when it is set.
+/// The styles the picker offers, in key order 1–9 then 0: the presets, then Custom when it is set.
 pub fn styles(config: &Config) -> Vec<Style> {
     let mut all = PRESETS.to_vec();
     if !config.custom_style.trim().is_empty() {
@@ -266,10 +266,18 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         notes.push(warning.clone());
     }
     let mut actions = vec![action(t!("popup.retry"), "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
-    if ready {
-        actions.push(action(t!("popup.copy"), "⌘C", ButtonVariant::Neutral, || Event::Copy, k));
+    let replace = ready && can_replace && p.flow.apply_error.is_none();
+    // ↩ goes to the main button, the last one: Copy for a summary or an expansion, else Replace.
+    let copy_first = style.changes_meaning();
+    if replace && copy_first {
+        actions.push(action(t!("popup.replace"), "⌘↩", ButtonVariant::Neutral, || Event::Replace, k));
     }
-    if ready && can_replace && p.flow.apply_error.is_none() {
+    if ready {
+        let (shortcut, variant) =
+            if copy_first { ("↩", ButtonVariant::Contrast) } else { ("⌘C", ButtonVariant::Neutral) };
+        actions.push(action(t!("popup.copy"), shortcut, variant, || Event::Copy, k));
+    }
+    if replace && !copy_first {
         actions.push(action(t!("popup.replace"), "↩", ButtonVariant::Contrast, || Event::Replace, k));
     }
     let mut body = col()
@@ -308,24 +316,43 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) ->
         .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
+/// The key that picks the style at `index`: 1–9, then 0 for the tenth (Custom).
+pub fn style_key(index: usize) -> String {
+    ((index + 1) % 10).to_string()
+}
+
+/// Two rows, tones then actions with Custom, so every style keeps a visible chip and one key.
 fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
-    let mut picker = row().key("styles").w_full().gap(4.0).label(t!("popup.style_picker"));
-    for (index, style) in styles(&p.config).into_iter().enumerate() {
-        let on = style.name() == current.name();
-        let label = format!("{} {}", index + 1, style.name());
-        let chosen = style.clone();
-        picker = picker.child(
-            Button::new(label)
+    let mut chips: Vec<El> = styles(&p.config)
+        .into_iter()
+        .enumerate()
+        .map(|(index, style)| {
+            let on = style.name() == current.name();
+            let key = style_key(index);
+            let chosen = style.clone();
+            // Small chips, so the five tones fit one row of the 440 pt popup.
+            Button::new(format!("{key} {}", style.name()))
+                .control_size(ControlSize::Small)
                 .variant(if on { ButtonVariant::Contrast } else { ButtonVariant::GhostMuted })
                 .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(Event::ChangeStyle(chosen.clone()), tx))
                 .build(k)
                 // The digit in the visible label is the key; read the name, state and key apart.
                 .label(t!("popup.style_label", name = style.name()))
                 .checked(on)
-                .shortcut_hint((index + 1).to_string()),
-        );
-    }
-    picker
+                .shortcut_hint(key)
+        })
+        .collect();
+    let actions = chips.split_off(TONES);
+    let chip_row = |key: &str, label: &str, chips: Vec<El>| {
+        chips.into_iter().fold(row().key(key.to_string()).w_full().gap(4.0).label(label), |row, chip| row.child(chip))
+    };
+    col()
+        .key("styles")
+        .w_full()
+        .gap(4.0)
+        .label(t!("popup.style_picker"))
+        .child(chip_row("tones", t!("popup.style_tones"), chips))
+        .child(chip_row("actions", t!("popup.style_actions"), actions))
 }
 
 #[cfg(test)]
@@ -339,6 +366,30 @@ mod tests {
         p.flow.state =
             State::Previewing { attempt: Attempt(1), original: "a".into(), style: Style::Clear, phase, can_replace };
         p
+    }
+
+    #[test]
+    fn return_copies_a_summary_and_replaces_a_rewrite() {
+        let press = |style: Style, cmd: bool| {
+            let mut p = previewing(Phase::Ready("b".into()), true);
+            if let State::Previewing { style: current, .. } = &mut p.flow.state {
+                *current = style;
+            }
+            let mods = rune::Mods { cmd, ..Default::default() };
+            super::super::on_key(&mut p, &rune::KeyEvent { key: rune::Key::Enter, mods }, &mut Tx::default());
+            p.flow.state
+        };
+        assert!(matches!(press(Style::Summarize, false), State::Idle), "↩ copies and closes");
+        assert!(matches!(press(Style::Summarize, true), State::Applying { .. }), "⌘↩ replaces");
+        assert!(matches!(press(Style::Expand, false), State::Idle));
+        assert!(matches!(press(Style::Clear, false), State::Applying { .. }));
+        assert!(matches!(press(Style::Bullets, false), State::Applying { .. }), "a list is still a rewrite");
+
+        let mut p = previewing(Phase::Ready("b".into()), true);
+        p.config.custom_style = "Rhyme.".into();
+        let zero = rune::KeyEvent { key: rune::Key::Text("0".into()), mods: rune::Mods::default() };
+        super::super::on_key(&mut p, &zero, &mut Tx::default());
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Custom(_), .. }), "0 picks Custom");
     }
 
     #[test]

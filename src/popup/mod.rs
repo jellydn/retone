@@ -412,17 +412,20 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
             return true;
         }
         Key::Escape => Event::Cancel,
-        Key::Enter => match p.flow.state {
+        Key::Enter => match &p.flow.state {
             State::AwaitingConsent { .. } => Event::ConsentGiven,
             State::Notice(_) => Event::Cancel,
+            State::Previewing { style, .. } if style.changes_meaning() && !ev.mods.cmd => Event::Copy,
             _ => Event::Replace,
         },
         Key::Command('c') => Event::Copy,
         Key::Command('r') => Event::Retry,
-        Key::Text(digit) if !ev.mods.cmd => match view::styles(&p.config).into_iter().nth(digit_index(digit)) {
-            Some(style) => Event::ChangeStyle(style),
-            None => return false,
-        },
+        Key::Text(key) if !ev.mods.cmd => {
+            match view::styles(&p.config).into_iter().enumerate().find(|(index, _)| view::style_key(*index) == *key) {
+                Some((_, style)) => Event::ChangeStyle(style),
+                None => return false,
+            }
+        }
         _ => return false,
     };
     p.step(event, tx);

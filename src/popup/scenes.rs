@@ -36,6 +36,20 @@ pub const SCENES: &[Scene] = &[
         p.config.theme = Theme::KanagawaLotus;
         previewing(p, Phase::Ready(REWRITE.into()), true);
     }),
+    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all ten chips show.
+    ("summary-example", |p| {
+        previewing(p, Phase::Ready("The meeting moved to Tuesday; update your calendars.".into()), true);
+        p.config.custom_style = "Make it friendly and short.".into();
+        if let State::Previewing { style, .. } = &mut p.flow.state {
+            *style = Style::Summarize;
+        }
+    }),
+    ("bullets-example", |p| {
+        previewing(p, Phase::Ready("- The meeting moved to Tuesday.\n- Please update your calendars.".into()), true);
+        if let State::Previewing { style, .. } = &mut p.flow.state {
+            *style = Style::Bullets;
+        }
+    }),
     ("loading-example", |p| previewing(p, Phase::Loading, true)),
     ("streaming-example", |p| previewing(p, Phase::Streaming("Hi team, the meeting has moved to Tue".into()), true)),
     ("error-example", |p| previewing(p, Phase::Failed("No answer within 60 s.".into()), true)),
