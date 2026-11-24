@@ -1,6 +1,6 @@
 [package]
 name = "retone"
-version = "0.1.0-beta.10"
+version = "0.1.0-beta.11"
 edition = "2024"
 license = "MIT"
 description = "Retone for macOS: rewrite the selected text in any app with your own hotkey"

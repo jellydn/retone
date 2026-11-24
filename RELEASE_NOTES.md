@@ -1,3 +1,18 @@
+## Retone 0.1.0-beta.11 — 2026-11-24
+
+- Right-click menu: select text in any app, then right-click → Services → **Retone: Fix Spelling and Grammar**, **Improve Writing**, **Summarize** or **Bullet Points**. The Retone popup opens with a preview. Nothing changes until you press Copy or Replace. Replace needs Accessibility and the same text still selected; without it, only Copy is offered. If the items do not show, turn them on in System Settings → Keyboard → Keyboard Shortcuts → Services → Text.
+- New styles in the popup: Simplify, Fix (spelling and grammar), Summarize, Expand and Bullets, next to Clear, Concise, Professional and Technical. The picker now has two rows: keys 1–9 pick a style and 0 picks Custom.
+- Summarize and Expand change the meaning of your text, so ↩ copies the answer and ⌘↩ replaces it.
+- Expand: when the answer is more than twice as long as your text, the popup shows a note and offers ⌘R to try again. Retone never cuts the answer.
+- Your default style and style shortcuts are now saved by name, not by position, so they stay on the right style when styles are added. If you go back to an earlier version, set them again.
+- For developers: the build works again after a Rune update moved only some of its crates (the `[patch.crates-io]` pins now match).
+
+Not tested yet in this release: Replace from the Services menu (the popup and the Replace button were checked in TextEdit), the Services menu in Safari, Chrome and Slack, the Services menu without Accessibility, and a Services request when Retone is not running.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.10 — 2026-11-23
 
 - VoiceOver: every help line in Settings is now read aloud with its row, including warnings and errors. Before, VoiceOver read only the row titles.
