@@ -21,8 +21,9 @@ jobs:
       # Renovate bumps the Rune dependencies but not [patch.crates-io]; a split once broke main (#22).
       - name: One Rune revision in Cargo.toml
         run: |
-          grep -o 'anomalyco/rune", rev = "[0-9a-f]*"' Cargo.toml | sort | uniq -c
-          test "$(grep -o 'anomalyco/rune", rev = "[0-9a-f]*"' Cargo.toml | sort -u | wc -l)" -eq 1
+          revs=$(grep -o 'anomalyco/rune", rev = "[0-9a-f]*"' Cargo.toml | sort | uniq -c)
+          echo "$revs"
+          test "$(echo "$revs" | grep -c .)" -eq 1
       - name: Install pinned Rust
         run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal --component rustfmt --component clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
