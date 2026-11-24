@@ -34,12 +34,12 @@ objc2-application-services = { version = "0.3", default-features = false, featur
 objc2-service-management = { version = "0.3", default-features = false, features = ["std", "objc2", "objc2-foundation", "SMAppService"] }
 
 [patch.crates-io]
-winit = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
-sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
-parley_engine = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
-wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
-accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
-accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "935d040ab509e16fa4d4396385ead51eb2d33d3d" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695" }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
