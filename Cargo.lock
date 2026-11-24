@@ -38,7 +38,7 @@ dependencies = [
 [[package]]
 name = "accesskit_macos"
 version = "0.27.2"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -69,7 +69,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
@@ -2491,7 +2491,7 @@ checksum = "9c4482d912d7671a7cd2089794f90ef3bb5f5f8c738230fb0fcd50fa020f0ed3"
 [[package]]
 name = "parley_engine"
 version = "0.12.0"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "fontique",
  "harfrust",
@@ -3327,7 +3327,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "sctk-adwaita"
 version = "0.10.1"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "log",
  "smithay-client-toolkit",
@@ -4403,7 +4403,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "30.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -4685,7 +4685,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/anomalyco/rune?rev=935d040ab509e16fa4d4396385ead51eb2d33d3d#935d040ab509e16fa4d4396385ead51eb2d33d3d"
+source = "git+https://github.com/anomalyco/rune?rev=3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695#3d4e2dfcecb71890f7f4d6167e82fe6db9dbb695"
 dependencies = [
  "ahash",
  "android-activity",
