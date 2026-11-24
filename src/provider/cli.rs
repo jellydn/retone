@@ -151,7 +151,12 @@ fn spawn_and_wait(
     deadline: Duration,
     stdout_limit: usize,
 ) -> Result<String, Failure> {
-    let mut command = Command::new(run.program);
+    let login = super::login_path::login_path();
+    let program = super::login_path::locate(run.program, login);
+    let mut command = Command::new(&program);
+    if let Some(path) = super::login_path::child_path(&program, login) {
+        command.env("PATH", path);
+    }
     command
         .args(args)
         .current_dir(workdir.path())

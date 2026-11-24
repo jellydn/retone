@@ -339,10 +339,14 @@ impl Popup {
 
     fn request(&mut self, attempt: Attempt, text: String, style: Style) {
         self.cancel = Cancel::default();
-        let (Some(provider), Some(env)) = (self.provider.clone(), self.links.as_ref().and_then(|l| l.env.clone()))
+        let (Some(provider), Some(mut env)) = (self.provider.clone(), self.links.as_ref().and_then(|l| l.env.clone()))
         else {
             return;
         };
+        // Checked when the popup opened (`Config::provider`), so an Err cannot reach here.
+        if let Ok(Some(program)) = self.config.cli_program(provider.kind()) {
+            env.set_program(provider.kind(), program);
+        }
         let cancel = self.cancel.clone();
         let shared = self.links.as_ref().map(|links| links.shared.clone());
         let (partial, waker) = (self.partial.clone(), self.waker.clone());
