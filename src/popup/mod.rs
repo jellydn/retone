@@ -124,6 +124,13 @@ impl Popup {
 
     /// The user's global shortcut, or the menu item Rewrite Selection.
     pub fn on_hotkey(&mut self, tx: &mut Tx) {
+        // Only this shortcut answers the Settings test; a style shortcut or a Service never ends it.
+        if let Some(links) = self.links.as_ref()
+            && links.shared.take_testing()
+        {
+            links.settings.update(|settings, _| settings.hotkey_tested());
+            return;
+        }
         self.open(None, None, tx);
     }
 
@@ -140,10 +147,6 @@ impl Popup {
 
     fn open(&mut self, style: Option<usize>, given: Option<String>, tx: &mut Tx) {
         let Some(links) = self.links.as_ref() else { return };
-        if links.shared.take_testing() {
-            links.settings.update(|settings, _| settings.hotkey_tested());
-            return;
-        }
         // The visible popup is busy: ignore the request, so it cannot change the style,
         // the given text or the Services note of the attempt in progress.
         if !self.flow.accepts_hotkey() {
