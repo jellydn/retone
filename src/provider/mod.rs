@@ -11,6 +11,7 @@ pub mod cli;
 pub mod codex;
 pub mod consent;
 pub mod local;
+mod login_path;
 pub mod opencode;
 pub mod pi;
 
@@ -127,7 +128,18 @@ pub struct Env {
 }
 
 impl Env {
-    /// The user's home, with the CLIs found by name on `PATH` at run time.
+    /// Runs this CLI from `program` instead of looking up its name: the Settings path field.
+    pub fn set_program(&mut self, kind: Kind, program: PathBuf) {
+        match kind {
+            Kind::Pi => self.pi_program = program,
+            Kind::OpenCode => self.opencode_program = program,
+            Kind::ClaudeCode => self.claude_program = program,
+            Kind::Codex => self.codex_program = program,
+            Kind::Local => {}
+        }
+    }
+
+    /// The user's home, with the CLIs found by name in the login shell's `PATH` at run time.
     pub fn system() -> Option<Env> {
         let home = rune_core::env::var("HOME").map(PathBuf::from)?;
         Some(Env {
