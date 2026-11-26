@@ -277,3 +277,16 @@ fn versions_and_escape_codes_are_parsed() {
     assert_eq!(parse_version("version 2.3"), None);
     assert_eq!(strip_ansi("\u{1b}[91m\u{1b}[1mError: \u{1b}[0mlimit"), "Error: limit");
 }
+
+#[test]
+fn a_cli_that_fails_its_version_check_says_what_it_printed_not_that_it_is_missing() {
+    let stub = Stub::new("1.5.2", "echo never");
+    let body = stub.program.parent().expect("dir").join("body.sh");
+    std::fs::write(
+        body,
+        "echo 'Warning: a plugin noticed something' >&2\necho 'env: node: No such file or directory' >&2\nexit 127\n",
+    )
+    .expect("write");
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m/x", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    assert_eq!(out.answer, Err("Pi was found but did not start: env: node: No such file or directory".into()));
+}

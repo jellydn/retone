@@ -1,0 +1,79 @@
+name: Rune bump
+
+# Renovate cannot update [patch.crates-io], so this job moves every Rune rev in Cargo.toml
+# (dependencies, rune-i18n and the patch pins) to the latest Rune commit in one PR.
+# A PR opened with GITHUB_TOKEN starts no other workflow, so this job runs the same checks as
+# ci.yml itself and merges only when they pass.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Monday 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: rune-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Find the latest Rune commit
+        id: rev
+        run: |
+          new=$(git ls-remote https://github.com/anomalyco/rune HEAD | cut -f1)
+          old=$(grep -v '^[[:space:]]*#' Cargo.toml | grep 'anomalyco/rune' | grep -o 'rev = "[0-9a-f]*"' | head -1 | cut -d'"' -f2)
+          test -n "$new" && test -n "$old"
+          echo "Rune: $old -> $new"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "old=$old" >> "$GITHUB_OUTPUT"
+      - name: Move every Rune rev
+        if: steps.rev.outputs.new != steps.rev.outputs.old
+        env:
+          NEW: ${{ steps.rev.outputs.new }}
+        run: |
+          sed -i '' "/anomalyco\/rune/ s/rev = \"[0-9a-f]*\"/rev = \"$NEW\"/" Cargo.toml
+          revs=$(grep -v '^[[:space:]]*#' Cargo.toml | grep 'anomalyco/rune' | grep -o 'rev = "[0-9a-f]*"' | sort | uniq -c)
+          echo "$revs"
+          test "$(echo "$revs" | grep -c .)" -eq 1
+      - name: Install pinned Rust
+        if: steps.rev.outputs.new != steps.rev.outputs.old
+        run: rustup toolchain install "$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        if: steps.rev.outputs.new != steps.rev.outputs.old
+      - name: Same checks as CI
+        if: steps.rev.outputs.new != steps.rev.outputs.old
+        run: |
+          cargo update -p rune -p rune-kit -p rune-core -p rune-i18n
+          cargo fmt --check
+          cargo clippy --locked --all-targets
+          cargo test --locked
+          sh scripts/release.sh
+      - name: Open and merge the PR
+        if: steps.rev.outputs.new != steps.rev.outputs.old
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.rev.outputs.new }}
+          OLD: ${{ steps.rev.outputs.old }}
+        run: |
+          branch="rune/bump-${NEW:0:7}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch already exists"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "fix(deps): update Rune and its patch pins to ${NEW:0:7}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "fix(deps): update Rune and its patch pins to ${NEW:0:7}" \
+            --body "Weekly Rune bump: every \`anomalyco/rune\` rev in Cargo.toml moves from \`${OLD:0:7}\` to \`${NEW:0:7}\` ([compare](https://github.com/anomalyco/rune/compare/${OLD}...${NEW})). The [workflow run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) passed fmt, clippy, tests and the app build before this merge."
+          gh pr merge "$branch" --merge --delete-branch

@@ -92,6 +92,8 @@ pub struct SettingsUi {
     pub opencode_model: TextEdit,
     pub claude_model: TextEdit,
     pub codex_model: TextEdit,
+    /// The optional program path of the chosen CLI provider; it follows the provider picker.
+    pub cli_program: TextEdit,
     pub custom_style: TextEdit,
     pub provider_choice: Option<Kind>,
     pub update_channel: UpdateChannel,
@@ -142,6 +144,7 @@ impl SettingsUi {
             opencode_model: TextEdit::new(&config.opencode_model),
             claude_model: TextEdit::new(&config.claude_model),
             codex_model: TextEdit::new(&config.codex_model),
+            cli_program: program_edit(&config, config.provider),
             custom_style: TextEdit::new(&config.custom_style),
             provider_choice: config.provider,
             update_channel: UpdateChannel::default(),
@@ -316,6 +319,7 @@ impl SettingsUi {
 
     pub fn choose_provider(&mut self, choice: Option<Kind>) {
         self.provider_choice = choice;
+        self.cli_program = program_edit(&self.config, choice);
         self.provider_status = None;
     }
 
@@ -330,6 +334,14 @@ impl SettingsUi {
         next.opencode_model = self.opencode_model.text.trim().to_string();
         next.claude_model = self.claude_model.text.trim().to_string();
         next.codex_model = self.codex_model.text.trim().to_string();
+        if let Some(kind) = next.provider.filter(|kind| *kind != Kind::Local) {
+            let program = self.cli_program.text.trim();
+            if program.is_empty() {
+                next.cli_programs.remove(kind.key());
+            } else {
+                next.cli_programs.insert(kind.key().to_string(), program.to_string());
+            }
+        }
         let checked = match next.provider {
             None => Ok(t!("settings.provider.saved_none").to_string()),
             Some(_) => {
@@ -357,6 +369,7 @@ impl SettingsUi {
     pub fn reload_choice(&mut self, kind: Kind) {
         self.config = self.shared.config();
         self.provider_choice = self.config.provider;
+        self.cli_program = program_edit(&self.config, self.provider_choice);
         let (field, model) = match kind {
             Kind::Local => (&mut self.local_model, &self.config.local_model),
             Kind::Pi => (&mut self.pi_model, &self.config.pi_model),
@@ -470,6 +483,14 @@ pub const SCENES: &[Scene] = &[
         s.provider_choice = Some(Kind::Local);
         s.sub_page = Some(SubPage::Address);
     }),
+    ("provider-llama-app", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.endpoint = TextEdit::new(local::LLAMA_APP);
+        s.local_model = TextEdit::new("Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M");
+        s.listed_models =
+            Some(Ok(vec!["Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M".into(), "ggml-org/gpt-oss-20b-GGUF:MXFP4".into()]));
+    }),
     ("provider-opencode", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::OpenCode);
@@ -481,6 +502,13 @@ pub const SCENES: &[Scene] = &[
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::ClaudeCode);
         s.claude_model = TextEdit::new("claude-haiku-5-5");
+    }),
+    ("provider-program-invalid", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Pi);
+        s.pi_model = TextEdit::new("ollama/qwen2.5:7b");
+        s.cli_program = TextEdit::new("~/.bun/bin/pi");
+        s.save_provider();
     }),
     ("styles", |s| s.page = Page::Styles),
     ("styles-shortcuts", |s| {
@@ -506,6 +534,12 @@ pub const SCENES: &[Scene] = &[
         )];
     }),
 ];
+
+/// The saved program path of a CLI provider, for the Settings field.
+fn program_edit(config: &Config, kind: Option<Kind>) -> TextEdit {
+    let saved = kind.and_then(|kind| config.cli_programs.get(kind.key()));
+    TextEdit::new(saved.map_or("", String::as_str))
+}
 
 #[cfg(test)]
 mod tests {

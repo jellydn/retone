@@ -1,3 +1,17 @@
+## Retone 0.1.0-beta.12 — 2026-11-26
+
+- CLI providers (Pi, OpenCode, Claude Code, Codex) now start when you open Retone from Finder or the Dock. Retone reads your login shell's PATH and also looks in the usual install folders (`~/.bun/bin`, `~/.local/bin`, `~/.npm-global/bin`, `~/Library/pnpm`, `~/.volta/bin`, `/opt/homebrew/bin`, `/usr/local/bin`). Before, it saw only the short system PATH and showed "not found".
+- New **Settings → Provider → Program** field: set the full path to a CLI that Retone cannot find by itself.
+- When a CLI is found but does not start, Settings now shows "was found but did not start" with the CLI's own error line, not only "Cannot run".
+- Pi 1.6.0 is verified for no-history use, next to Pi 1.5.2.
+- Local AI: a new preset for [Llama.app](https://llama.app) (`http://127.0.0.1:9931/v1`), next to Ollama, LM Studio and llama.cpp.
+- Local AI errors are now shortened and cleaned like CLI errors, so a server message cannot show your selected text or home folder.
+- The hotkey test in Settings answers only the main shortcut. Before, a style shortcut or a Services request during the test was taken as the test press.
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.11 — 2026-11-24
 
 - Right-click menu: select text in any app, then right-click → Services → **Retone: Fix Spelling and Grammar**, **Improve Writing**, **Summarize** or **Bullet Points**. The Retone popup opens with a preview. Nothing changes until you press Copy or Replace. Replace needs Accessibility and the same text still selected; without it, only Copy is offered. If the items do not show, turn them on in System Settings → Keyboard → Keyboard Shortcuts → Services → Text.

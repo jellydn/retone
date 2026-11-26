@@ -7,6 +7,8 @@ use crate::styles::{PRESETS, Style};
 use crate::theme::Theme;
 use rune_core::prefs::Prefs;
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// Release and dev builds keep separate prefs folders, as they have separate bundle IDs.
 pub const APP_ID: &str =
@@ -32,6 +34,8 @@ pub struct Config {
     pub opencode_model: String,
     pub claude_model: String,
     pub codex_model: String,
+    /// Optional absolute path per CLI, by `Kind::key`, for a CLI the login shell cannot find.
+    pub cli_programs: BTreeMap<String, String>,
 }
 
 impl Config {
@@ -51,6 +55,7 @@ impl Config {
             opencode_model: text("opencode_model"),
             claude_model: text("claude_model"),
             codex_model: text("codex_model"),
+            cli_programs: prefs.get("cli_programs").unwrap_or_default(),
         }
     }
 
@@ -70,6 +75,7 @@ impl Config {
             ("opencode_model", serde_json::json!(self.opencode_model)),
             ("claude_model", serde_json::json!(self.claude_model)),
             ("codex_model", serde_json::json!(self.codex_model)),
+            ("cli_programs", serde_json::json!(self.cli_programs)),
         ];
         for (key, value) in fields {
             save(prefs, key, &value).map_err(|e| e.to_string())?;
@@ -93,9 +99,25 @@ impl Config {
         }
     }
 
+    /// The path set for this CLI in Settings. Err when it is not an absolute path to a file.
+    pub fn cli_program(&self, kind: Kind) -> Result<Option<PathBuf>, String> {
+        let Some(program) = self.cli_programs.get(kind.key()).filter(|program| !program.is_empty()) else {
+            return Ok(None);
+        };
+        let path = PathBuf::from(program);
+        if path.is_absolute() && path.is_file() {
+            Ok(Some(path))
+        } else {
+            Err(t!("settings.provider.program_invalid", name = kind.name(), path = program, program = kind.key()))
+        }
+    }
+
     /// The chosen provider, checked as Settings checks it before saving. Err names what is
     /// missing, for the popup's "Choose a provider" notice.
     pub fn provider(&self) -> Result<Provider, String> {
+        if let Some(kind) = self.provider {
+            self.cli_program(kind)?;
+        }
         match self.provider {
             None => Err(t!("popup.no_provider_body").into()),
             Some(Kind::Local) => {

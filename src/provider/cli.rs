@@ -19,6 +19,9 @@ use std::thread::{self, JoinHandle, sleep};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const VERSION_DEADLINE: Duration = Duration::from_secs(5);
+/// For `retone --cli-check` only: a version-manager shim (mise, Vite+) can fetch Node into the
+/// empty temp `HOME` before the CLI starts, which takes longer than [`VERSION_DEADLINE`].
+const PROBE_DEADLINE: Duration = Duration::from_secs(60);
 /// Most stderr bytes kept for the error message.
 const STDERR_LIMIT: usize = 16 * 1024;
 
@@ -92,7 +95,18 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
     let version = match spawn_and_wait(run, workdir, &version_args, "", cancel, VERSION_DEADLINE, usize::MAX) {
         Ok(output) => parse_version(&output).ok_or_else(|| not_verified(t!("cli.unknown_version")))?,
         Err(Failure::Cancelled) => return Err(t!("provider.cancelled").into()),
-        Err(_) => return Err(t!("cli.not_found", name = run.name)),
+        Err(Failure::Spawn) => return Err(t!("cli.not_found", name = run.name)),
+        // Found but broken (a missing `node`, a plugin that crashes): say what it printed.
+        Err(Failure::Exited(stderr)) => {
+            return Err(t!("cli.version_failed", name = run.name, error = last_error_line(&stderr)));
+        }
+        Err(Failure::TimedOut) => {
+            return Err(t!(
+                "cli.version_failed",
+                name = run.name,
+                error = t!("provider.timeout", seconds = VERSION_DEADLINE.as_secs())
+            ));
+        }
     };
     if !run.verified.contains(&version.as_str()) {
         return Err(not_verified(&version));
@@ -116,7 +130,7 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
     }
 }
 
-/// The installed version, asked with `HOME` set to a temp folder and the usual deadline. For
+/// The installed version, asked with `HOME` set to a temp folder and [`PROBE_DEADLINE`]. For
 /// `retone --cli-check`, whose probe must not touch the real data folders (OpenCode logs even
 /// `--version` under `~/.local/share`).
 pub fn installed_version(program: &Path) -> Option<String> {
@@ -131,7 +145,7 @@ pub fn installed_version(program: &Path) -> Option<String> {
         stdin: String::new(),
     };
     let args = [OsString::from("--version")];
-    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), VERSION_DEADLINE, usize::MAX).ok()?;
+    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), PROBE_DEADLINE, usize::MAX).ok()?;
     parse_version(&output)
 }
 
@@ -151,7 +165,12 @@ fn spawn_and_wait(
     deadline: Duration,
     stdout_limit: usize,
 ) -> Result<String, Failure> {
-    let mut command = Command::new(run.program);
+    let login = super::login_path::login_path();
+    let program = super::login_path::locate(run.program, login);
+    let mut command = Command::new(&program);
+    if let Some(path) = super::login_path::child_path(&program, login) {
+        command.env("PATH", path);
+    }
     command
         .args(args)
         .current_dir(workdir.path())

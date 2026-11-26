@@ -411,6 +411,18 @@ fn cli_row(s: &SettingsUi, k: &Kit, kind: Kind, title: &str) -> El {
     setting(k, &format!("{}-model", kind.key()), &TERMINAL, title, help(k, format!("{how} {checked}")), input)
 }
 
+/// The optional program path of the chosen CLI, for a CLI that the login shell cannot find.
+fn program_row(s: &SettingsUi, k: &Kit, kind: Kind) -> El {
+    let input = TextInput::new(&s.cli_program)
+        .label(t!("settings.provider.program"))
+        .placeholder(t!("settings.provider.program_placeholder"))
+        .width(Some(240.0))
+        .on_edit(|s: &mut SettingsUi| &mut s.cli_program)
+        .build(k);
+    let body = t!("settings.provider.program_help", name = kind.name(), program = kind.key());
+    setting(k, "cli-program", &TERMINAL, t!("settings.provider.program"), help(k, body), input)
+}
+
 fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     let choices: Vec<Option<Kind>> = std::iter::once(None).chain(KINDS.map(Some)).collect();
     let names: Vec<&str> = std::iter::once(t!("settings.provider.none")).chain(KINDS.map(Kind::name)).collect();
@@ -426,7 +438,10 @@ fn provider_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
     match s.provider_choice {
         None => {}
         Some(Kind::Local) => rows.extend(local_rows(s, k)),
-        Some(kind) => rows.push(cli_row(s, k, kind, t!("settings.provider.model"))),
+        Some(kind) => {
+            rows.push(cli_row(s, k, kind, t!("settings.provider.model")));
+            rows.push(program_row(s, k, kind));
+        }
     }
     // The other CLIs' models, under Advanced.
     let extra = KINDS
@@ -582,7 +597,8 @@ fn address_page(s: &SettingsUi, k: &Kit) -> El {
         .gap(6.0)
         .child(preset("Ollama", local::OLLAMA))
         .child(preset("LM Studio", local::LM_STUDIO))
-        .child(preset("llama.cpp", local::LLAMA_CPP));
+        .child(preset("llama.cpp", local::LLAMA_CPP))
+        .child(preset("Llama.app", local::LLAMA_APP));
     let address_help =
         if s.allow_network { t!("settings.address.help_network") } else { t!("settings.address.help_local") };
     col()
