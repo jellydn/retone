@@ -1,3 +1,15 @@
+## Retone 0.1.0-beta.13 — 2026-11-26
+
+- Clipboard: when an app is slow to answer Retone's ⌘C and the copy lands after Retone stopped waiting, Retone now puts your clipboard back. Before, the selected text could stay on your clipboard. Retone watches for such a late copy for 2 seconds, also after you close the popup.
+- Pi 1.6.1 is verified for no-history use, next to Pi 1.5.2 and 1.6.0.
+- For developers: `retone --cli-check` waits longer for the CLI version, so a version-manager shim that installs Node first no longer stops the check.
+
+Not tested yet in this release: the late-copy restore in a real slow app (a unit test covers it).
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.12 — 2026-11-26
 
 - CLI providers (Pi, OpenCode, Claude Code, Codex) now start when you open Retone from Finder or the Dock. Retone reads your login shell's PATH and also looks in the usual install folders (`~/.bun/bin`, `~/.local/bin`, `~/.npm-global/bin`, `~/Library/pnpm`, `~/.volta/bin`, `/opt/homebrew/bin`, `/usr/local/bin`). Before, it saw only the short system PATH and showed "not found".
