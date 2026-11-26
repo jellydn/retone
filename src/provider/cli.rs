@@ -19,6 +19,9 @@ use std::thread::{self, JoinHandle, sleep};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const VERSION_DEADLINE: Duration = Duration::from_secs(5);
+/// For `retone --cli-check` only: a version-manager shim (mise, Vite+) can fetch Node into the
+/// empty temp `HOME` before the CLI starts, which takes longer than [`VERSION_DEADLINE`].
+const PROBE_DEADLINE: Duration = Duration::from_secs(60);
 /// Most stderr bytes kept for the error message.
 const STDERR_LIMIT: usize = 16 * 1024;
 
@@ -127,7 +130,7 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
     }
 }
 
-/// The installed version, asked with `HOME` set to a temp folder and the usual deadline. For
+/// The installed version, asked with `HOME` set to a temp folder and [`PROBE_DEADLINE`]. For
 /// `retone --cli-check`, whose probe must not touch the real data folders (OpenCode logs even
 /// `--version` under `~/.local/share`).
 pub fn installed_version(program: &Path) -> Option<String> {
@@ -142,7 +145,7 @@ pub fn installed_version(program: &Path) -> Option<String> {
         stdin: String::new(),
     };
     let args = [OsString::from("--version")];
-    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), VERSION_DEADLINE, usize::MAX).ok()?;
+    let output = spawn_and_wait(&run, &workdir, &args, "", &Cancel::default(), PROBE_DEADLINE, usize::MAX).ok()?;
     parse_version(&output)
 }
 
