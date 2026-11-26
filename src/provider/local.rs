@@ -24,6 +24,9 @@ pub const LM_STUDIO: &str = "http://127.0.0.1:1234/v1";
 /// llama.cpp's `llama-server`: one loaded model, whose ID is often the GGUF file path; it
 /// ignores the model name in requests.
 pub const LLAMA_CPP: &str = "http://127.0.0.1:8080/v1";
+/// Llama.app (llama.app), the menu-bar app from the llama.cpp team: its llama.cpp router lists
+/// every installed model and loads the one a request names.
+pub const LLAMA_APP: &str = "http://127.0.0.1:9931/v1";
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
 

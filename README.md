@@ -27,7 +27,7 @@
 ## Installation Requirements
 
 - macOS 14 or later on Apple Silicon (tested on macOS 27 only)
-- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), Claude Code or Codex
+- One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp, [Llama.app](https://llama.app)), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), Claude Code or Codex
 
 > [!IMPORTANT]
 > **First launch security warning**
@@ -142,7 +142,7 @@ Retone asks for consent the first time it sends text to a provider and model, an
 
 | Provider    | How Retone runs it                                                                                                                                                                                                                                                                                                                                 |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local AI    | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`, streamed into the preview (Copy and Replace wait for the end). Presets for Ollama (`127.0.0.1:11434`), LM Studio (`127.0.0.1:1234`) and llama.cpp (`127.0.0.1:8080`). Optional API key in the Keychain. See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
+| Local AI    | HTTP or HTTPS to an OpenAI-compatible `/v1/chat/completions`, streamed into the preview (Copy and Replace wait for the end). Presets for Ollama (`127.0.0.1:11434`), LM Studio (`127.0.0.1:1234`), llama.cpp (`127.0.0.1:8080`) and Llama.app (`127.0.0.1:9931`). Optional API key in the Keychain. See [Local AI on your LAN or Tailscale](#local-ai-on-your-lan-or-tailscale). |
 | Pi          | `pi -p --no-session` with tools, extensions and context files off, and `--thinking off` with the text on stdin, in a private temporary folder. Tested with Pi 1.5.2 and 1.6.0.                                                                                                                                                                     |
 | OpenCode    | `opencode run` with an in-memory database, auto-update off, and data folders in a private temporary folder that Retone deletes after the run. Tested with OpenCode 2.3.0.                                                                                                                                                                          |
 | Claude Code | `claude -p --no-session-persistence` with tools, MCP servers, hooks and skills off, and prompt history skipped. Your user settings stay loaded for the API address and login. Tested with Claude Code 2.1.66.                                                                                                                                      |
@@ -172,6 +172,12 @@ llama-server -m ~/models/qwen2.5-3b-instruct-q4_k_m.gguf --host 0.0.0.0 --port 8
 - Choose the **llama.cpp** preset (or your server's LAN or Tailscale address), then **List** in the **Model** row. llama-server serves one model and reports its file path as the ID; Retone shows only the file name. Add `--alias qwen2.5-3b` for a shorter name.
 - With `--api-key`, paste the key in **API key** and click **Save**. Retone keeps it in the macOS Keychain (not in its settings file) and sends it as `Authorization: Bearer …`. Without the key, Retone says that the server needs one.
 - Use `--host 0.0.0.0` only together with `--api-key` or on Tailscale: without a key, anyone on your network can use the server.
+
+#### Llama.app
+
+[Llama.app](https://llama.app) is a menu-bar app from the llama.cpp team. It serves an OpenAI-compatible API at `localhost:9931/v1`, with no API key.
+
+- Install a model in Llama.app, then choose the **Llama.app** preset and **List** in the **Model** row. Llama.app lists every installed model, such as `Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`, and loads the one Retone asks for. The first rewrite with a model waits while Llama.app loads it.
 
 Rules for every CLI provider:
 
