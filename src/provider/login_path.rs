@@ -34,7 +34,8 @@ pub fn login_path() -> Option<&'static OsStr> {
             None => None,
         });
         let mut dirs: Vec<PathBuf> = shell.iter().flat_map(std::env::split_paths).collect();
-        for dir in installs.filter(|dir| dir.is_dir()) {
+        // A folder with a `:` cannot be a PATH entry; skip it so the shell's PATH is kept.
+        for dir in installs.filter(|dir| dir.is_dir() && !dir.as_os_str().as_encoded_bytes().contains(&b':')) {
             if !dirs.contains(&dir) {
                 dirs.push(dir);
             }
