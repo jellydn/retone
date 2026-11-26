@@ -597,7 +597,8 @@ fn address_page(s: &SettingsUi, k: &Kit) -> El {
         .gap(6.0)
         .child(preset("Ollama", local::OLLAMA))
         .child(preset("LM Studio", local::LM_STUDIO))
-        .child(preset("llama.cpp", local::LLAMA_CPP));
+        .child(preset("llama.cpp", local::LLAMA_CPP))
+        .child(preset("Llama.app", local::LLAMA_APP));
     let address_help =
         if s.allow_network { t!("settings.address.help_network") } else { t!("settings.address.help_local") };
     col()

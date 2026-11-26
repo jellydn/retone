@@ -483,6 +483,14 @@ pub const SCENES: &[Scene] = &[
         s.provider_choice = Some(Kind::Local);
         s.sub_page = Some(SubPage::Address);
     }),
+    ("provider-llama-app", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.endpoint = TextEdit::new(local::LLAMA_APP);
+        s.local_model = TextEdit::new("Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M");
+        s.listed_models =
+            Some(Ok(vec!["Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M".into(), "ggml-org/gpt-oss-20b-GGUF:MXFP4".into()]));
+    }),
     ("provider-opencode", |s| {
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::OpenCode);
