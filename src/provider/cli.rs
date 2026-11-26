@@ -92,7 +92,18 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
     let version = match spawn_and_wait(run, workdir, &version_args, "", cancel, VERSION_DEADLINE, usize::MAX) {
         Ok(output) => parse_version(&output).ok_or_else(|| not_verified(t!("cli.unknown_version")))?,
         Err(Failure::Cancelled) => return Err(t!("provider.cancelled").into()),
-        Err(_) => return Err(t!("cli.not_found", name = run.name)),
+        Err(Failure::Spawn) => return Err(t!("cli.not_found", name = run.name)),
+        // Found but broken (a missing `node`, a plugin that crashes): say what it printed.
+        Err(Failure::Exited(stderr)) => {
+            return Err(t!("cli.version_failed", name = run.name, error = last_error_line(&stderr)));
+        }
+        Err(Failure::TimedOut) => {
+            return Err(t!(
+                "cli.version_failed",
+                name = run.name,
+                error = t!("provider.timeout", seconds = VERSION_DEADLINE.as_secs())
+            ));
+        }
     };
     if !run.verified.contains(&version.as_str()) {
         return Err(not_verified(&version));

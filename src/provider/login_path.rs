@@ -14,11 +14,35 @@ use std::time::Duration;
 const MARKER: &str = "__RETONE_PATH__=";
 const SHELL_DEADLINE: Duration = Duration::from_secs(5);
 
-/// Read once per run, on the first CLI request (a worker thread, never the frame loop). None
-/// when the shell fails or is too slow; the CLIs then get Retone's own `PATH`.
+/// Where CLI installers put their programs, under the home folder or as absolute paths. Searched
+/// after the shell's `PATH`, because a shell can add them only in interactive sessions (fish's
+/// `status is-interactive` block, `~/.zshrc`), which `-l -c` does not run.
+const INSTALL_DIRS: &[&str] =
+    &[".bun/bin", ".local/bin", ".npm-global/bin", "Library/pnpm", ".volta/bin", "/opt/homebrew/bin", "/usr/local/bin"];
+
+/// Read once per run, on the first CLI request (a worker thread, never the frame loop): the
+/// login shell's `PATH` (Retone's own when the shell fails or is too slow), then the install
+/// folders that exist.
 pub fn login_path() -> Option<&'static OsStr> {
     static PATH: OnceLock<Option<OsString>> = OnceLock::new();
-    PATH.get_or_init(read).as_deref()
+    PATH.get_or_init(|| {
+        let shell = read().or_else(|| std::env::var_os("PATH"));
+        let home = rune_core::env::var("HOME").map(PathBuf::from);
+        let installs = INSTALL_DIRS.iter().filter_map(|dir| match home.as_ref() {
+            _ if dir.starts_with('/') => Some(PathBuf::from(dir)),
+            Some(home) => Some(home.join(dir)),
+            None => None,
+        });
+        let mut dirs: Vec<PathBuf> = shell.iter().flat_map(std::env::split_paths).collect();
+        // A folder with a `:` cannot be a PATH entry; skip it so the shell's PATH is kept.
+        for dir in installs.filter(|dir| dir.is_dir() && !dir.as_os_str().as_encoded_bytes().contains(&b':')) {
+            if !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
+        }
+        std::env::join_paths(dirs).ok().filter(|path| !path.is_empty())
+    })
+    .as_deref()
 }
 
 fn read() -> Option<OsString> {
