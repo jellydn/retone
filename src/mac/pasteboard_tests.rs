@@ -3,8 +3,8 @@ use std::sync::{Mutex, MutexGuard};
 
 /// Pasteboard tests run one at a time. In parallel, two `pasteboardWithUniqueName` boards on
 /// different threads sometimes saw each other's items. The app uses the pasteboard from one
-/// worker thread only, so serial tests match it.
-fn serial() -> MutexGuard<'static, ()> {
+/// worker thread only, so serial tests match it. `capture` tests use it too.
+pub(crate) fn serial() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     // A failed test poisons the lock; the next test still runs.
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())

@@ -7,15 +7,39 @@
 //! about a second in a slow app.
 
 use crate::flow::Captured;
-use crate::mac::{ax, events, pasteboard::Board, screens};
+use crate::mac::{ax, events, pasteboard::Board, pasteboard::Snapshot, screens};
 use crate::spike_log::spike;
 use crate::strategy::{self, Strategy};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// How long a ⌘C may take to reach the pasteboard before Retone decides nothing was selected.
 /// Generous, because a slow copy would otherwise fall back to the old clipboard text.
 const COPY_WAIT: Duration = Duration::from_millis(500);
+/// How long after the ⌘C a late copy is still put back. A pasteboard change in this time is
+/// taken to be that copy.
+const LATE_COPY_WINDOW: Duration = Duration::from_secs(2);
+
+/// A ⌘C that did not reach the pasteboard in `COPY_WAIT`. If it lands later, it leaves the
+/// selection on the user's clipboard, so the native worker keeps checking and puts the user's
+/// clipboard back.
+pub struct LateCopy {
+    snapshot: Snapshot,
+    posted: Instant,
+}
+
+impl LateCopy {
+    /// Puts the user's clipboard back if the copy landed. Some while it can still land.
+    pub fn check(self, board: &Board) -> Option<LateCopy> {
+        let now = board.change_count();
+        if now != self.snapshot.change_count {
+            board.restore_if_unchanged(&self.snapshot, now);
+            spike!("capture late copy restored");
+            return None;
+        }
+        (self.posted.elapsed() < LATE_COPY_WINDOW).then_some(self)
+    }
+}
 
 pub struct Capture {
     pub captured: Captured,
@@ -31,7 +55,8 @@ pub fn has_permissions() -> bool {
     ax::is_trusted() && events::can_post_events()
 }
 
-pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> {
+/// `late` is set when the ⌘C fallback timed out; the caller then calls `LateCopy::check`.
+pub fn capture(board: &Board, given: Option<String>, late: &mut Option<LateCopy>) -> Result<Capture, String> {
     if !has_permissions() {
         if let Some(text) = given {
             // A Service gave the text, but without Accessibility Retone cannot check the field
@@ -77,7 +102,7 @@ pub fn capture(board: &Board, given: Option<String>) -> Result<Capture, String> 
             text
         }
         None => {
-            let copied = copy_selection(board, pid.ok_or(t!("capture.no_app"))?);
+            let copied = copy_selection(board, pid.ok_or(t!("capture.no_app"))?, late);
             match &copied {
                 Ok(text) => {
                     spike!("capture path=cmd-c chars={} newlines={}", text.chars().count(), text.matches('\n').count())
@@ -168,8 +193,8 @@ fn selection_or_clipboard(
 }
 
 /// Posts ⌘C to the target and reads the result, restoring the user's clipboard afterwards.
-/// An empty string means the app copied nothing (no selection); the clipboard is then unchanged.
-fn copy_selection(board: &Board, pid: i32) -> Result<String, String> {
+/// An empty string means no copy arrived in `COPY_WAIT`; `late` then holds the snapshot.
+fn copy_selection(board: &Board, pid: i32, late: &mut Option<LateCopy>) -> Result<String, String> {
     if events::secure_input_on() {
         return Err(t!("capture.secure_input").into());
     }
@@ -187,6 +212,7 @@ fn copy_selection(board: &Board, pid: i32) -> Result<String, String> {
     let start = rune_core::time::now();
     while board.change_count() == snapshot.change_count {
         if start.elapsed() > COPY_WAIT {
+            *late = Some(LateCopy { snapshot, posted: start });
             return Ok(String::new());
         }
         sleep(Duration::from_millis(10));
@@ -199,7 +225,25 @@ fn copy_selection(board: &Board, pid: i32) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::selection_or_clipboard;
+    use super::{LateCopy, selection_or_clipboard};
+    use crate::mac::pasteboard::{Board, Snapshot};
+
+    fn user_clipboard(board: &Board) -> Snapshot {
+        let text = ("public.utf8-plain-text".to_string(), b"user's clipboard".to_vec());
+        board.restore(&Snapshot { items: vec![vec![text]], change_count: 0, complete: true });
+        board.snapshot()
+    }
+
+    #[test]
+    fn a_copy_that_lands_after_the_wait_is_put_back() {
+        let _serial = crate::mac::pasteboard::tests::serial();
+        let board = Board::unique();
+        let late = LateCopy { snapshot: user_clipboard(&board), posted: rune_core::time::now() };
+        let late = late.check(&board).expect("nothing landed yet: still watching");
+        board.write_transient_text("the selection, copied late");
+        assert!(late.check(&board).is_none(), "the copy landed: done");
+        assert_eq!(board.text().as_deref(), Some("user's clipboard"));
+    }
 
     fn no_read() -> Option<String> {
         panic!("the clipboard must not be read")
