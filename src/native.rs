@@ -63,9 +63,11 @@ impl Native {
                 };
                 late = late.and_then(|pending| pending.check(&board));
                 let Some(command) = command else { continue };
-                // A new command takes the pasteboard over; a copy that has not landed by now is
-                // no longer watched.
-                late = None;
+                // A capture or replace takes the pasteboard over; a copy that has not landed by now
+                // is no longer watched. Forget (the popup closed) keeps the watch.
+                if !matches!(command, Command::Forget) {
+                    late = None;
+                }
                 match command {
                     Command::Capture { attempt, given } => {
                         current = None;
