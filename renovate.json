@@ -1,11 +1,22 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
   "packageRules": [
     {
-      "description": "Rune and its patched crates share one git revision; a bump must move them together.",
+      "description": "One weekly PR for all non-major updates; Renovate merges it when every check passes.",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "weekly dependencies"
+    },
+    {
+      "description": "Rune and its patched crates share one git rev, and Renovate cannot update [patch.crates-io]. .github/workflows/rune-bump.yml moves them together instead.",
       "matchManagers": ["cargo"],
       "matchDepNames": [
         "rune",
@@ -19,7 +30,7 @@
         "accesskit_windows",
         "accesskit_macos"
       ],
-      "groupName": "rune"
+      "enabled": false
     }
   ]
 }
