@@ -278,8 +278,10 @@ fn answer_failures(style: &Style, original: &str, answer: &str, ratio: f64, chan
         return vec![format!("{} failed", style.name())];
     }
     let mut failures = Vec::new();
-    // Fix may fairly return a text that has no errors unchanged.
-    if changed == 0.0 && *style != Style::Fix {
+    // Fix may fairly return a text that has no errors unchanged, but a text that starts with a
+    // lower-case letter always has one.
+    let has_error = original.trim_start().chars().next().is_some_and(char::is_lowercase);
+    if changed == 0.0 && (*style != Style::Fix || has_error) {
         failures.push(format!("{} returned the text unchanged", style.name()));
     }
     failures.extend(job_failure(style, original, answer, ratio, changed));
@@ -496,8 +498,11 @@ mod tests {
         assert_eq!(new_numbers(rows, "More than 10, 000 rows broke the deploy."), ["000", "10"], "a split number");
         assert!(new_numbers("the sync at 10am", "The sync at 10:00 AM.").is_empty());
         assert_eq!(new_numbers("the sync at 10am", "The sync at 10:30 AM."), ["30"]);
-        // The eval cannot tell a clean text from a missed error, so an unchanged Fix passes.
-        assert!(check(Style::Fix, original).is_empty());
+        // A text that starts in lower case has an error, so Fix must change it; a text that does
+        // not may be clean, so an unchanged Fix passes there.
+        assert_eq!(check(Style::Fix, original), ["Fix returned the text unchanged"]);
+        let clean = "The deploy broke because the config had the wrong port. We should add a check for it.";
+        assert!(Report::new(clean, &[(Style::Fix, clean.to_string())]).failures.is_empty());
 
         // Fix and Clear may read alike: only the tones are checked apart.
         let same = "The deploy broke because the config had the wrong port. We should add a check for it.";
