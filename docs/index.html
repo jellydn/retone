@@ -110,7 +110,7 @@
         {
           "@type": "Question",
           "name": "Which AI providers does Retone support?",
-          "acceptedAnswer": { "@type": "Answer", "text": "A local OpenAI-compatible server such as Ollama, LM Studio or llama.cpp, plus Pi, OpenCode, Claude Code and Codex. Retone asks for consent the first time it sends text to a provider and model." }
+          "acceptedAnswer": { "@type": "Answer", "text": "A local OpenAI-compatible server such as Ollama, LM Studio, llama.cpp or Llama.app, plus Pi, OpenCode, Claude Code and Codex. Retone asks for consent the first time it sends text to a provider and model." }
         },
         {
           "@type": "Question",
@@ -233,12 +233,12 @@
         <li class="rounded-2xl border border-line bg-surface p-6">
           <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-cream text-sm font-bold text-brand-link">3</span>
           <h3 class="mt-5 font-semibold">Pick a style</h3>
-          <p class="mt-2 text-sm leading-relaxed text-subtle">Clear, Concise, Professional, Technical, Simplify — or fix spelling, summarise, expand, and make bullet points.</p>
+          <p class="mt-2 text-sm leading-relaxed text-subtle">Clear, Fix, Summarize, Bullets and TL;DR on keys 1–5. Concise, Professional, Technical, Simplify, Expand and your own style are behind More.</p>
         </li>
         <li class="rounded-2xl border border-line bg-surface p-6">
           <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-cream text-sm font-bold text-brand-link">4</span>
           <h3 class="mt-5 font-semibold">Preview and replace</h3>
-          <p class="mt-2 text-sm leading-relaxed text-subtle">Enter replaces the selection, ⌘C copies it, ⌘R retries, and Esc cancels with nothing changed.</p>
+          <p class="mt-2 text-sm leading-relaxed text-subtle">Enter replaces the selection, ⌘C copies it, ⌘R asks for a different version, and Esc cancels with nothing changed.</p>
         </li>
       </ol>
     </section>
@@ -264,7 +264,7 @@
           <article class="rounded-2xl border border-line bg-canvas p-6">
             <svg class="h-6 w-6 text-brand-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
             <h3 class="mt-4 font-semibold">See it before it lands</h3>
-            <p class="mt-2 text-sm leading-relaxed text-subtle">Highlights show what changed. Copy, Replace, Retry and Cancel are always one key away.</p>
+            <p class="mt-2 text-sm leading-relaxed text-subtle">Highlights show what changed. Copy, Replace, Retry and Cancel are always one key away. If a rewrite fails, the popup says how to fix it and offers another style, another model or Settings.</p>
           </article>
           <article class="rounded-2xl border border-line bg-canvas p-6">
             <svg class="h-6 w-6 text-brand-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -274,7 +274,7 @@
           <article class="rounded-2xl border border-line bg-canvas p-6">
             <svg class="h-6 w-6 text-brand-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 9h4M7 12h7"/></svg>
             <h3 class="mt-4 font-semibold">Local AI or your CLI</h3>
-            <p class="mt-2 text-sm leading-relaxed text-subtle">Use Ollama, LM Studio or llama.cpp on this Mac — or Pi, OpenCode, Claude Code and Codex. Switch provider from the popup with ⌘P.</p>
+            <p class="mt-2 text-sm leading-relaxed text-subtle">Use Ollama, LM Studio, llama.cpp or Llama.app on this Mac — or Pi, OpenCode, Claude Code and Codex. Switch provider from the popup with ⌘P.</p>
           </article>
           <article class="rounded-2xl border border-line bg-canvas p-6">
             <svg class="h-6 w-6 text-brand-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M12 5v14"/><circle cx="12" cy="12" r="9"/></svg>
@@ -349,7 +349,7 @@
       <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <article class="rounded-2xl border border-line bg-surface p-6">
           <h3 class="font-semibold text-brand-link">Local AI</h3>
-          <p class="mt-2 text-sm leading-relaxed text-subtle">Ollama, LM Studio or llama.cpp over OpenAI-compatible /v1/chat/completions. Optional API key in the macOS Keychain. A 3B model or larger is recommended.</p>
+          <p class="mt-2 text-sm leading-relaxed text-subtle">Ollama, LM Studio, llama.cpp or Llama.app over OpenAI-compatible /v1/chat/completions. Optional API key in the macOS Keychain. Settings recommends three small models that passed Retone&#39;s style checks.</p>
         </article>
         <article class="rounded-2xl border border-line bg-surface p-6">
           <h3 class="font-semibold text-brand-link">Pi</h3>
@@ -425,7 +425,7 @@ brew install --cask retone</code></pre>
         </details>
         <details class="group py-5">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold marker:content-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-blue">Which AI providers does Retone support?<svg class="h-5 w-5 shrink-0 text-brand-link transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-          <p class="mt-3 max-w-2xl text-sm leading-relaxed text-subtle">A local OpenAI-compatible server such as Ollama, LM Studio or llama.cpp, plus Pi, OpenCode, Claude Code and Codex. Retone asks for consent the first time it sends text to a provider and model.</p>
+          <p class="mt-3 max-w-2xl text-sm leading-relaxed text-subtle">A local OpenAI-compatible server such as Ollama, LM Studio, llama.cpp or Llama.app, plus Pi, OpenCode, Claude Code and Codex. Retone asks for consent the first time it sends text to a provider and model.</p>
         </details>
         <details class="group py-5">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold marker:content-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-blue">Does Retone save the text it rewrites?<svg class="h-5 w-5 shrink-0 text-brand-link transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
