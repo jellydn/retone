@@ -1,13 +1,13 @@
 #!/bin/sh
 # Runs `retone --eval-styles` on each model and ranks them for Retone's styles.
 #
-#   sh scripts/model-bench.sh [--endpoint URL] [--runs N] [--models FILE] [MODEL ...]
+#   sh scripts/model-bench.sh [--endpoint URL] [--runs N] [--models FILE] [--name NAME] [MODEL ...]
 #
 # Models come from the arguments, or from FILE (default bench/models.txt: one model ID per
 # line, `#` starts a comment). The server must be able to load each one on request: Llama.app,
-# a llama-server router, Ollama or LM Studio. Answers go to target/bench/DATE/. The table and the
-# JSON go to bench/results/DATE.md and DATE.json and rank every model benched that day, so models
-# can be benched one at a time; delete target/bench/DATE to start over.
+# a llama-server router, Ollama or LM Studio. Answers go to target/bench/NAME/. The table and the
+# JSON go to bench/results/NAME.md and NAME.json and rank every model benched under that name, so
+# models can be benched one at a time; delete target/bench/NAME to start over. NAME: today's date.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -22,7 +22,8 @@ while [ $# -gt 0 ]; do
     --endpoint) endpoint=$2; shift 2 ;;
     --runs) runs=$2; shift 2 ;;
     --models) models_file=$2; shift 2 ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    --name) name=$2; shift 2 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) break ;;
   esac
 done
@@ -32,9 +33,13 @@ fi
 
 cargo build -q
 date=$(date +%Y-%m-%d)
-raw=target/bench/$date
+name=${name:-$date}
+case $name in
+  *[!A-Za-z0-9._-]*) echo "--name: use only letters, digits, '.', '_' and '-'" >&2; exit 1 ;;
+esac
+raw=target/bench/$name
 mkdir -p "$raw" bench/results
-results=bench/results/$date
+results=bench/results/$name
 
 for model in "$@"; do
   slug=$(printf '%s' "$model" | tr -c 'A-Za-z0-9._-' '_')
@@ -77,25 +82,26 @@ done
 # Ranking. A model qualifies when it answered every request, passed at least 85% of the checks,
 # invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at
 # most $slow_s s per rewrite (median).
-# Fastest: the qualifying model with the lowest median time. Best quality: the highest pass rate
-# (then fewest invented and dropped numbers). Best balance: of the others, the highest pass rate
+# Speed and size come first: fastest is the qualifying model with the lowest median time; smallest,
+# of the others, uses the least memory (a model with no RAM figure, as on Ollama, is skipped);
+# quality, of the others, has the highest pass rate (then fewest invented and dropped numbers)
 # among models at most twice as slow as the fastest.
 jq -s '
   def qualifies: .errors == 0 and .pass_rate >= 0.85 and .invented_rate <= 0.05 and .tone_spread_failures == 0 and .total_s <= '"$slow_s"';
   (map(select(qualifies))) as $ok
   | ($ok | min_by(.total_s)) as $fast
-  | ($ok | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
-  | ($ok | map(select(.model != $fast.model and .model != $best.model and .total_s <= 2 * ($fast.total_s // 0)))
-        | sort_by(-.pass_rate, .total_s) | first) as $balance
+  | ($ok | map(select(.model != $fast.model and .ram_gb > 0)) | min_by(.ram_gb)) as $small
+  | ($ok | map(select(.model != $fast.model and .model != $small.model and .total_s <= 2 * ($fast.total_s // 0)))
+        | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
   | {date: "'"$date"'",
      top: [($fast | select(.) | {pick: "fastest", model}),
-           ($balance | select(.) | {pick: "balance", model}),
+           ($small | select(.) | {pick: "smallest", model}),
            ($best | select(.) | {pick: "quality", model})],
      models: sort_by(-.pass_rate, .total_s)}
 ' $(ls "$raw"/*.json | grep -v '\.runs\.json$') > "$results.json"
 
 {
-  echo "# Model bench, $date"
+  echo "# Model bench, $name"
   echo
   echo "$(sysctl -n machdep.cpu.brand_string), $(($(sysctl -n hw.memsize) / 1073741824)) GB. Every style on every sample of"
   echo "\`retone --eval-styles\`, $(jq -r '[.models[].runs] | unique | join(" or ")' "$results.json") runs per model, through"

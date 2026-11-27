@@ -152,15 +152,15 @@ Retone asks for consent the first time it sends text to a provider and model, an
 
 ### Choosing a local model
 
-Use a 3B model or larger. Smaller models often gave almost the same text for every style, did not shorten text for Concise, and dropped facts. Models that think before they answer (LFM2.5, LFM3, Granite 4.2, Qwen3.5) took 5 to 50 seconds per rewrite with default server settings, because Retone waits for the thinking to end.
+Use a 3B model or larger. Smaller models often gave almost the same text for every style, did not shorten text for Concise, and dropped facts. LFM3 Omni 2B passed 94% of the checks, but its Clear answer changed who did the work ("I fixed" became "you fixed"). Retone asks the server not to think before it answers (`reasoning_effort: "none"`). With that, Qwen3.5 4B, Granite 4.2 3B and Gemma 4 answer in about 1 s; before, they took 5 to 50 s. LFM2.5 2.6B and gpt-oss-20b still think, and take about 6 s per rewrite.
 
-`scripts/model-bench.sh` ran every style on four sample texts, three times, with 13 models on an Apple M1 Max ([results](bench/results/2026-11-27.md), [how to run it again](bench/README.md)). The top 3, also under **Settings → Provider → Recommended models**:
+`scripts/model-bench.sh` ran every style on four sample texts, three times, with 21 models on an Apple M1 Max ([results](bench/results/2026-11-27-thinking-off.md), [how to run it again](bench/README.md)). The top 3, also under **Settings → Provider → Recommended models**:
 
 | Pick         | Model                 | File   | Time per rewrite | Pass | Ollama                                              | Llama.app and llama-server                    |
 | ------------ | --------------------- | ------ | ---------------- | ---- | --------------------------------------------------- | --------------------------------------------- |
-| Fastest      | Qwen2.5 3B Instruct   | 2.1 GB | 0.6 s            | 90%  | `hf.co/Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`        | `Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`        |
-| Balance      | Llama 3.2 3B Instruct | 2.0 GB | 0.8 s            | 90%  | `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | `bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` |
-| Best quality | Qwen2.5 7B Instruct   | 4.7 GB | 1.3 s            | 94%  | `hf.co/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M`        | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M`        |
+| Fastest      | Qwen2.5 3B Instruct   | 2.1 GB | 0.6 s            | 92%  | `hf.co/Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`        | `Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M`        |
+| Smallest     | Llama 3.2 3B Instruct | 2.0 GB | 0.7 s            | 90%  | `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | `bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` |
+| Best quality | Qwen2.5 7B Instruct   | 4.7 GB | 1.2 s            | 99%  | `hf.co/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M`        | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M`        |
 
 LM Studio: search for the Hugging Face name, download the Q4_K_M file, then choose the model with **List**.
 

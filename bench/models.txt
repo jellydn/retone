@@ -14,3 +14,12 @@ unsloth/gemma-4-E2B-it-GGUF:Q4_K_M
 unsloth/gemma-4-E4B-it-GGUF:Q4_K_M
 Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
 bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M
+# Llama.app's curated list (llama.app/models, Nov 2026), its own IDs, smallest quant it offers.
+ggml-org/Qwen3.5-0.8B-GGUF:Q8_0
+ggml-org/LFM3-Omni-2B-GGUF:Q8_0
+ggml-org/LFM3-1.7B-GGUF:Q8_0
+ggml-org/gemma-4-E2B-it-GGUF:Q8_0
+ggml-org/gemma-4-E4B-it-GGUF:Q4_0
+ggml-org/gemma-4-12B-it-GGUF:Q4_0
+ggml-org/Ministral-3-8B-Instruct-2512-GGUF:Q8_0
+ggml-org/gpt-oss-20b-GGUF:MXFP4
