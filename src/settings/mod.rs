@@ -422,9 +422,12 @@ impl SettingsUi {
         self.sub_page = None;
     }
 
+    /// Saved on its own, and the switch moves only when the write succeeds: `on_service` reads
+    /// the saved value, so the switch must never show Off while requests still get through.
     pub fn set_services_enabled(&mut self, on: bool) {
-        self.config.services_enabled = on;
-        self.save();
+        if self.shared.prefs().set("services_enabled", &serde_json::json!(on)).is_ok() {
+            self.config.services_enabled = on;
+        }
     }
 
     pub fn set_theme(&mut self, theme: crate::theme::Theme) {
