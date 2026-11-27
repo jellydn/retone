@@ -1,3 +1,13 @@
+## Retone 0.1.0-beta.17 — 2026-11-27
+
+- New **Settings → General → Right-click menu (macOS Services)** switch, on by default. Turn it off and Retone ignores its right-click items (Fix Spelling and Grammar, Improve Writing, Summarize, Bullet Points and TL;DR). macOS does not let an app hide its own Services items, so when the switch is off, Settings shows **Open Keyboard Settings**: there, click **Keyboard Shortcuts › Services › Text** and turn off the Retone items to remove them from the menu.
+
+Not tested yet in this release: a right-click request that arrives while the switch is off, in a real app (unit tests and rendered scenes cover the switch).
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.16 — 2026-11-27
 
 - **Retry now gives a different version.** Before, ⌘R sent the same request again and often got exactly the same text. Now Retry shows the model its last answer and asks for a different version, for every provider. Local AI also gives the model more freedom and a new seed on a retry. The first rewrite in a style is unchanged.
