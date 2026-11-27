@@ -13,7 +13,7 @@ use crate::placement::{self, Rect};
 use crate::provider::{self, Cancel, Outcome, Provider, consent};
 use crate::settings::SettingsUi;
 use crate::shared::Shared;
-use crate::styles::Style;
+use crate::styles::{MAIN, Style};
 use rune::machine::{Attempt, Effects};
 use rune::{AppHandle, Key, KeyEvent, Latest, Tx};
 use std::sync::{Arc, Mutex};
@@ -40,6 +40,8 @@ pub struct Popup {
     pub adapter_warning: Option<String>,
     /// The provider list, open over the current state (⌘P or a click on the header label).
     pub picker: Option<Picker>,
+    /// The More list of styles, open over the preview, with its highlighted row.
+    pub more: Option<usize>,
     request: Latest<(Attempt, Outcome)>,
     /// Models the local endpoint lists, fetched when the provider list opens.
     local_models: Latest<Result<Vec<String>, String>>,
@@ -92,6 +94,7 @@ impl Default for Popup {
             given: None,
             adapter_warning: None,
             picker: None,
+            more: None,
             request: Latest::default(),
             local_models: Latest::default(),
             cancel: Cancel::default(),
@@ -166,6 +169,7 @@ impl Popup {
         self.provider = checked.ok();
         self.adapter_warning = None;
         self.picker = None;
+        self.more = None;
         self.flow.default_style = style.map_or_else(|| self.config.style(), |index| self.config.style_at(index));
         let effects = self.flow.step(Event::Hotkey { has_provider: self.provider.is_some() });
         self.run(effects, tx);
@@ -199,6 +203,7 @@ impl Popup {
 
     /// Opens the provider list, or closes it when it is open.
     pub fn toggle_picker(&mut self) {
+        self.more = None;
         if self.picker.take().is_some() {
             return;
         }
@@ -265,6 +270,22 @@ impl Popup {
         self.provider_problem = None;
         self.adapter_warning = None;
         self.step(Event::ProviderChanged { consented }, tx);
+    }
+
+    /// Opens the More list on the current style, or closes it when it is open.
+    pub fn toggle_more(&mut self) {
+        if self.more.take().is_some() {
+            return;
+        }
+        let State::Previewing { style, .. } = &self.flow.state else { return };
+        self.more = Some(view::more_styles(&self.config).iter().position(|s| s == style).unwrap_or(0));
+    }
+
+    /// Picks the More list's row `index` and reruns in that style; a key with no row keeps the list open.
+    pub fn choose_more(&mut self, index: usize, tx: &mut Tx) {
+        let Some(style) = view::more_styles(&self.config).get(index).cloned() else { return };
+        self.more = None;
+        self.step(Event::ChangeStyle(style), tx);
     }
 
     /// Adds the listed local models to the open list, keeping the highlighted row.
@@ -433,6 +454,10 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
         // The list holds the keys while open, so ⏎ or ⌘C cannot act on the rewrite behind it.
         return true;
     }
+    if let Some(selected) = p.more {
+        more_key(p, selected, ev, tx);
+        return true;
+    }
     let event = match &ev.key {
         Key::Command('p') => {
             p.toggle_picker();
@@ -447,12 +472,14 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
         },
         Key::Command('c') => Event::Copy,
         Key::Command('r') => Event::Retry,
-        Key::Text(key) if !ev.mods.cmd => {
-            match view::styles(&p.config).into_iter().enumerate().find(|(index, _)| view::style_key(*index) == *key) {
-                Some((_, style)) => Event::ChangeStyle(style),
-                None => return false,
+        Key::Text(key) if !ev.mods.cmd => match digit_index(key) {
+            index if index < MAIN.len() => Event::ChangeStyle(MAIN[index].clone()),
+            index if index == MAIN.len() => {
+                p.toggle_more();
+                return true;
             }
-        }
+            _ => return false,
+        },
         _ => return false,
     };
     p.step(event, tx);
@@ -470,6 +497,19 @@ fn picker_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) {
         }
         Key::Escape | Key::Command('p') => p.picker = None,
         Key::Text(digit) if !ev.mods.cmd => p.choose(digit_index(digit), tx),
+        _ => {}
+    }
+}
+
+/// More list keys: ↑/↓ move, ⏎ uses the highlighted style, 1–9 use that row, ⎋ closes.
+fn more_key(p: &mut Popup, selected: usize, ev: &KeyEvent, tx: &mut Tx) {
+    let rows = view::more_styles(&p.config).len();
+    match &ev.key {
+        Key::Up => p.more = Some((selected + rows - 1) % rows),
+        Key::Down | Key::Tab => p.more = Some((selected + 1) % rows),
+        Key::Enter => p.choose_more(selected, tx),
+        Key::Escape => p.more = None,
+        Key::Text(digit) if !ev.mods.cmd => p.choose_more(digit_index(digit), tx),
         _ => {}
     }
 }

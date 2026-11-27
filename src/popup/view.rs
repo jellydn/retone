@@ -4,13 +4,14 @@ use super::Popup;
 use crate::config::Config;
 use crate::flow::{Event, Notice, Phase, State};
 use crate::provider::consent;
-use crate::styles::{PRESETS, Style, TONES};
+use crate::styles::{MAIN, PRESETS, Style};
 use rune::{Cx, El, LiveRegion, ScrollSpec, Span, Tx, col, el, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, ControlSize, Kit, List, ListItem, Spinner};
 
-/// The styles the picker offers, in key order 1–9, 0, then -: the presets, then Custom when it is set.
-pub fn styles(config: &Config) -> Vec<Style> {
-    let mut all = PRESETS.to_vec();
+/// The styles behind More, in key order 1–9: the presets not on the main row, then Custom when it
+/// is set.
+pub fn more_styles(config: &Config) -> Vec<Style> {
+    let mut all: Vec<Style> = PRESETS.iter().filter(|style| !MAIN.contains(style)).cloned().collect();
     if !config.custom_style.trim().is_empty() {
         all.push(Style::Custom(config.custom_style.trim().to_string()));
     }
@@ -47,9 +48,10 @@ pub fn spoken(p: &Popup) -> Option<(String, LiveRegion)> {
 
 pub fn view(p: &Popup, cx: &mut Cx<Popup>) -> El {
     let k = p.config.theme.kit(cx.system_dark());
-    let body = match (&p.picker, &p.flow.state) {
-        (Some(picker), _) => picker_body(p, &k, picker),
-        (None, state) => state_body(p, &k, state),
+    let body = match (&p.picker, p.more, &p.flow.state) {
+        (Some(picker), _, _) => picker_body(p, &k, picker),
+        (None, Some(selected), State::Previewing { style, .. }) => more_body(p, &k, selected, style),
+        (None, _, state) => state_body(p, &k, state),
     };
     col()
         .key("popup")
@@ -146,6 +148,39 @@ fn picker_body(p: &Popup, k: &Kit, picker: &super::Picker) -> El {
         .child(text(hint).font(k.ty.text_xsmall).color(k.c.text_muted).label(spoken_hint(picker.listing)))
 }
 
+/// The styles that are not on the main row, as a list like the provider list.
+fn more_body(p: &Popup, k: &Kit, selected: usize, current: &Style) -> El {
+    let mut list = List::new().active(Some(selected));
+    for (index, style) in more_styles(&p.config).into_iter().enumerate() {
+        list = list.item(
+            ListItem::new(format!("{}  {}", index + 1, style.name()))
+                .selected(style == *current)
+                .on_select(move |p: &mut Popup, tx: &mut Tx| p.choose_more(index, tx)),
+        );
+    }
+    col()
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .gap(8.0)
+        .child(
+            col()
+                .key("more-styles")
+                .w_full()
+                .grow(1.0)
+                .min_h(0.0)
+                .scroll(ScrollSpec { stick_bottom: false })
+                .label(t!("popup.more.label"))
+                .child(list.build(k)),
+        )
+        .child(
+            text(t!("popup.more.hint"))
+                .font(k.ty.text_xsmall)
+                .color(k.c.text_muted)
+                .label(t!("popup.more.spoken_hint")),
+        )
+}
+
 fn loading(k: &Kit, label: &str) -> El {
     row()
         .key("loading")
@@ -230,7 +265,7 @@ fn consent_body(p: &Popup, k: &Kit) -> El {
 }
 
 fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase, can_replace: bool) -> El {
-    let picker = style_picker(p, k, style);
+    let picker = style_picker(k, style);
     // Removed words in red on the original, added words on a green background in the rewrite.
     let (removed, added) = match phase {
         Phase::Ready(rewrite) => crate::diff::changed_words(original, rewrite),
@@ -323,43 +358,42 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) ->
         .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
-/// The key that picks the style at `index`: 1–9, 0 for the tenth, then - for the eleventh (Custom).
-pub fn style_key(index: usize) -> String {
-    if index >= 10 { "-".to_string() } else { ((index + 1) % 10).to_string() }
-}
-
-/// Two rows, tones then actions with Custom, so every style keeps a visible chip and one key.
-fn style_picker(p: &Popup, k: &Kit, current: &Style) -> El {
-    let mut chips: Vec<El> = styles(&p.config)
-        .into_iter()
-        .enumerate()
-        .map(|(index, style)| {
-            let on = style.name() == current.name();
-            let key = style_key(index);
-            let chosen = style.clone();
-            // Small chips, so the five tones fit one row of the 440 pt popup.
-            Button::new(format!("{key} {}", style.name()))
-                .control_size(ControlSize::Small)
-                .variant(if on { ButtonVariant::Contrast } else { ButtonVariant::GhostMuted })
+/// One row: the main styles on keys 1–5, then More on 6. When the current style is behind More,
+/// that chip shows its name, so the row always says which style made the preview.
+fn style_picker(k: &Kit, current: &Style) -> El {
+    let chip = |key: String, name: &str, on: bool| {
+        Button::new(format!("{key} {name}")).control_size(ControlSize::Small).variant(if on {
+            ButtonVariant::Contrast
+        } else {
+            ButtonVariant::GhostMuted
+        })
+    };
+    let mut row = row().key("styles").w_full().gap(4.0).label(t!("popup.style_picker"));
+    for (index, style) in MAIN.iter().enumerate() {
+        let on = style == current;
+        let chosen = style.clone();
+        let key = (index + 1).to_string();
+        row = row.child(
+            chip(key.clone(), style.name(), on)
                 .on_press_tx(move |p: &mut Popup, tx: &mut Tx| p.step(Event::ChangeStyle(chosen.clone()), tx))
                 .build(k)
                 // The digit in the visible label is the key; read the name, state and key apart.
                 .label(t!("popup.style_label", name = style.name()))
                 .checked(on)
-                .shortcut_hint(key)
-        })
-        .collect();
-    let actions = chips.split_off(TONES);
-    let chip_row = |key: &str, label: &str, chips: Vec<El>| {
-        chips.into_iter().fold(row().key(key.to_string()).w_full().gap(4.0).label(label), |row, chip| row.child(chip))
-    };
-    col()
-        .key("styles")
-        .w_full()
-        .gap(4.0)
-        .label(t!("popup.style_picker"))
-        .child(chip_row("tones", t!("popup.style_tones"), chips))
-        .child(chip_row("actions", t!("popup.style_actions"), actions))
+                .shortcut_hint(key),
+        );
+    }
+    let in_more = !MAIN.contains(current);
+    let more_name = if in_more { current.name() } else { t!("popup.more") };
+    let key = (MAIN.len() + 1).to_string();
+    row.child(
+        chip(key.clone(), &format!("{more_name} ▾"), in_more)
+            .on_press(|p: &mut Popup| p.toggle_more())
+            .build(k)
+            .label(t!("popup.more.button", name = more_name))
+            .checked(in_more)
+            .shortcut_hint(key),
+    )
 }
 
 #[cfg(test)]
@@ -395,14 +429,31 @@ mod tests {
 
         let mut p = previewing(Phase::Ready("b".into()), true);
         p.config.custom_style = "Rhyme.".into();
-        let key = |p: &mut Popup, text: &str| {
-            let ev = rune::KeyEvent { key: rune::Key::Text(text.into()), mods: rune::Mods::default() };
-            super::super::on_key(p, &ev, &mut Tx::default());
+        let key = |p: &mut Popup, key: rune::Key| {
+            super::super::on_key(p, &rune::KeyEvent { key, mods: rune::Mods::default() }, &mut Tx::default());
         };
-        key(&mut p, "0");
-        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Tldr, .. }), "0 picks TL;DR");
-        key(&mut p, "-");
-        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Custom(_), .. }), "- picks Custom");
+        let digit = |d: &str| rune::Key::Text(d.into());
+        key(&mut p, digit("5"));
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Tldr, .. }), "5 picks TL;DR");
+
+        // 6 opens More; its rows have their own keys 1–9, and Custom is the last row.
+        let more = more_styles(&p.config);
+        assert_eq!(more.first(), Some(&Style::Concise));
+        assert!(matches!(more.last(), Some(Style::Custom(_))));
+        key(&mut p, digit("6"));
+        assert!(p.more.is_some(), "6 opens More");
+        key(&mut p, digit(&more.len().to_string()));
+        assert!(p.more.is_none());
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Custom(_), .. }), "the last row is Custom");
+
+        // In More, keys pick rows, not the main styles, and Esc closes it without a change.
+        key(&mut p, digit("6"));
+        key(&mut p, digit("1"));
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Concise, .. }), "row 1 is Concise");
+        key(&mut p, digit("6"));
+        key(&mut p, rune::Key::Escape);
+        assert!(p.more.is_none());
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Concise, .. }), "Esc keeps the style");
     }
 
     #[test]

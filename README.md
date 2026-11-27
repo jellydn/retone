@@ -48,7 +48,7 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 - 🖱️ **Right-click menu**: select text, right-click, and pick Retone: Fix Spelling and Grammar, Improve Writing, Summarize, Bullet Points or TL;DR (under Services in some apps); the popup opens with a preview
 - 🎯 **Style shortcuts**: optional, one per style (Settings → Styles), to open the popup in that style
 - 📍 **Popup at the caret**: the popup opens next to your text, or at the mouse pointer when the app does not report a caret
-- ✍️ **Styles**: tones (Clear, Concise, Professional, Technical, Simplify), actions (Fix spelling and grammar, Summarize, Expand, Bullet points, TL;DR), or your own instruction; press a number key to switch (0 is TL;DR, - is your own). For Summarize, Expand and TL;DR, ↩ copies the result and ⌘↩ replaces the selection
+- ✍️ **Styles**: tones (Clear, Concise, Professional, Technical, Simplify), actions (Fix spelling and grammar, Summarize, Expand, Bullet points, TL;DR), or your own instruction. The popup shows one row (1 Clear, 2 Fix, 3 Summarize, 4 Bullets, 5 TL;DR); press 6 for More, a list of the other styles and your own. For Summarize, Expand and TL;DR, ↩ copies the result and ⌘↩ replaces the selection
 - 👀 **Preview first**: see the rewrite before anything changes; Enter replaces, ⌘C copies, ⌘R retries, Esc cancels
 - 🛡️ **Safe replace**: Retone replaces only when the same app, field and selection are still there; on failure or cancel nothing changes, and your clipboard comes back
 - 🔀 **Switch provider in the popup**: click the provider label or press ⌘P to pick another provider or local model; Retone keeps the choice
@@ -121,7 +121,7 @@ Without the permission, Retone works in **clipboard mode**: copy the text first,
 
 1. Select text in any app.
 2. Press your hotkey (or choose **Rewrite Selection** from the Retone menu-bar item).
-3. Pick a style with a number key, and wait for the preview.
+3. Pick a style with a number key (1–5), or press **6** for **More** to see the other styles, and wait for the preview.
 4. **Enter** replaces the selection, **⌘C** copies the rewrite, **⌘R** tries again, **Esc** cancels.
 5. To use another provider or model, press **⌘P** (or click the provider label at the top right), choose with **↑/↓** or a number, and press **Enter**. Retone saves the choice for the next rewrite and asks for consent first if that provider and model are new.
 
@@ -133,7 +133,7 @@ You can use Retone without a hotkey:
 
 1. Select text in an app that supports Services, for example Safari, Chrome, Mail, Notes or TextEdit.
 2. Right-click the selection and choose **Retone: Fix Spelling and Grammar**, **Retone: Improve Writing**, **Retone: Summarize**, **Retone: Bullet Points** or **Retone: TL;DR**. When the menu has many items, macOS puts them under **Services ›**. You can also use the app menu: **App name › Services**.
-3. The popup opens with a preview in that style. You can change to a different style with a number key.
+3. The popup opens with a preview in that style. You can change to a different style with a number key, or with **6 More**.
 4. For Summarize and TL;DR, **Enter** copies the result and **⌘Enter** replaces the selection. For the other styles, **Enter** replaces.
 
 **TL;DR** is useful for long text, for example an article in Safari. When the text has about 150 words or more, you get a `TL;DR` line (with the text's own title, if it has one), the main point, key takeaways and one closing line. For a shorter text, you get only the main point in one sentence.
