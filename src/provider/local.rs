@@ -38,7 +38,7 @@ pub struct Recommended {
     pub why: Key,
 }
 
-/// The top 3 of bench/results/2026-11-27.md: fastest, best balance, best quality.
+/// The top 3 of bench/results/2026-11-27-thinking-off.md: fastest, smallest, best quality.
 pub const RECOMMENDED: [Recommended; 3] = [
     Recommended {
         name: "Qwen2.5 3B Instruct",
@@ -50,7 +50,7 @@ pub const RECOMMENDED: [Recommended; 3] = [
         name: "Llama 3.2 3B Instruct",
         id: "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",
         file_gb: 2.0,
-        why: key!("settings.recommended.balance"),
+        why: key!("settings.recommended.smallest"),
     },
     Recommended {
         name: "Qwen2.5 7B Instruct",
