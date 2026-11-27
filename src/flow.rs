@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 use crate::input::{self, Refusal};
+use crate::provider::{ErrorKind, Failure, Retry};
 use crate::styles::Style;
 use rune::machine::{Attempt, Effects, Seq};
 
@@ -45,7 +46,10 @@ pub enum Phase {
     /// The answer so far, while the provider streams it. Replace and Copy wait for `Ready`.
     Streaming(String),
     Ready(String),
-    Failed(String),
+    Failed(Failure),
+    /// An answer Retone dropped as far too long, shown only when the user asked: Copy only, as it
+    /// may have answered the text instead of rewriting it, or be cut off.
+    Dropped(String),
 }
 
 impl Phase {
@@ -91,9 +95,11 @@ pub enum Event {
     },
     Answer {
         attempt: Attempt,
-        result: Result<String, String>,
+        result: Result<String, Failure>,
     },
     Retry,
+    /// Show the answer a too-long failure dropped, for Copy only.
+    ShowDropped,
     ChangeStyle(Style),
     /// The user picked another provider or model in the popup. `consented` says whether that
     /// provider and model already have consent.
@@ -114,10 +120,19 @@ pub enum Event {
 pub enum Effect {
     Capture(Attempt),
     ShowPopup,
-    Request { attempt: Attempt, text: String, style: Style },
+    /// `retry` is set for a Retry only: the first request in a style keeps the usual settings.
+    Request {
+        attempt: Attempt,
+        text: String,
+        style: Style,
+        retry: Option<Retry>,
+    },
     CancelRequest,
     SaveConsent,
-    Apply { attempt: Attempt, text: String },
+    Apply {
+        attempt: Attempt,
+        text: String,
+    },
     CopyText(String),
     ClosePopup,
 }
@@ -156,7 +171,7 @@ impl Flow {
                 self.captured(result, consented)
             }
             (State::AwaitingConsent { original, style }, Event::ConsentGiven) => {
-                let (state, mut effects) = self.request(original, style);
+                let (state, mut effects) = self.request(original, style, None);
                 effects.push(SaveConsent);
                 (state, effects)
             }
@@ -172,21 +187,39 @@ impl Flow {
             {
                 let phase = match result {
                     Ok(text) if !text.trim().is_empty() => Phase::Ready(text),
-                    Ok(_) => Phase::Failed(t!("flow.no_text").into()),
+                    Ok(_) => Phase::Failed(Failure::new(ErrorKind::Empty, t!("flow.no_text"))),
                     Err(error) => Phase::Failed(error),
                 };
                 (State::Previewing { attempt, original, style, phase, can_replace }, Effects::none())
             }
             (State::Previewing { original, style, phase, .. }, Event::Retry) => {
-                let (state, effects) = self.request(original, style);
+                // Only a complete answer is one to move away from; a failure has none.
+                let previous = match &phase {
+                    Phase::Ready(answer) => Some(answer.clone()),
+                    _ => None,
+                };
+                let (state, effects) = self.request(original, style, Some(Retry { previous }));
                 (state, with_cancel_if_loading(&phase, effects))
             }
+            (
+                State::Previewing {
+                    attempt,
+                    original,
+                    style,
+                    phase: Phase::Failed(Failure { dropped: Some(answer), .. }),
+                    ..
+                },
+                Event::ShowDropped,
+            ) => {
+                let phase = Phase::Dropped(answer);
+                (State::Previewing { attempt, original, style, phase, can_replace: false }, Effects::none())
+            }
             (State::Previewing { original, phase, .. }, Event::ChangeStyle(style)) => {
-                let (state, effects) = self.request(original, style);
+                let (state, effects) = self.request(original, style, None);
                 (state, with_cancel_if_loading(&phase, effects))
             }
             (State::Previewing { original, style, phase, .. }, Event::ProviderChanged { consented: true }) => {
-                let (state, effects) = self.request(original, style);
+                let (state, effects) = self.request(original, style, None);
                 (state, with_cancel_if_loading(&phase, effects))
             }
             // Nothing is sent to a provider and model without its own consent.
@@ -195,7 +228,7 @@ impl Flow {
                 (State::AwaitingConsent { original, style }, effects)
             }
             (State::AwaitingConsent { original, style }, Event::ProviderChanged { consented: true }) => {
-                self.request(original, style)
+                self.request(original, style, None)
             }
             (
                 State::Previewing { original, style, phase: Phase::Ready(rewrite), can_replace: true, .. },
@@ -205,7 +238,7 @@ impl Flow {
                 let effects = Effects::one(Apply { attempt, text: rewrite.clone() });
                 (State::Applying { attempt, original, style, rewrite }, effects)
             }
-            (State::Previewing { phase: Phase::Ready(rewrite), .. }, Event::Copy) => {
+            (State::Previewing { phase: Phase::Ready(rewrite) | Phase::Dropped(rewrite), .. }, Event::Copy) => {
                 (State::Idle, Effects::two(CopyText(rewrite), ClosePopup))
             }
             (State::Applying { attempt, .. }, Event::Applied { attempt: a, result: Ok(()) }) if attempt == a => {
@@ -254,15 +287,15 @@ impl Flow {
         if !consented {
             return (State::AwaitingConsent { original, style }, Effects::one(Effect::ShowPopup));
         }
-        let (state, mut effects) = self.request(original, style);
+        let (state, mut effects) = self.request(original, style, None);
         effects.push(Effect::ShowPopup);
         (state, effects)
     }
 
-    fn request(&mut self, original: String, style: Style) -> (State, Effects<Effect>) {
+    fn request(&mut self, original: String, style: Style, retry: Option<Retry>) -> (State, Effects<Effect>) {
         self.apply_error = None;
         let attempt = self.seq.next();
-        let effect = Effect::Request { attempt, text: original.clone(), style: style.clone() };
+        let effect = Effect::Request { attempt, text: original.clone(), style: style.clone(), retry };
         let state =
             State::Previewing { attempt, original, style, phase: Phase::Loading, can_replace: self.can_replace };
         (state, Effects::one(effect))

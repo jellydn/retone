@@ -119,8 +119,16 @@ fn stub_typed(status: &str, content_type: &str, body: &str) -> (String, mpsc::Re
 fn a_rewrite_posts_the_exact_model_and_the_delimited_text() {
     let (endpoint, request) =
         stub("200 OK", r#"{"choices":[{"message":{"content":"```\nThe meeting moved to Tuesday.\n```"}}]}"#);
-    let answer =
-        rewrite(&endpoint, "qwen2.5:0.5b", None, &Style::Clear, "the meeting are moved", &Cancel::default(), &|_| {});
+    let answer = rewrite(
+        &endpoint,
+        "qwen2.5:0.5b",
+        None,
+        &Style::Clear,
+        "the meeting are moved",
+        None,
+        &Cancel::default(),
+        &|_| {},
+    );
     assert_eq!(answer, Ok("The meeting moved to Tuesday.".into()));
     let request = request.recv().expect("request");
     assert!(request.starts_with("POST /v1/chat/completions"), "{request}");
@@ -132,18 +140,43 @@ fn a_rewrite_posts_the_exact_model_and_the_delimited_text() {
         body["messages"].as_array().expect("messages").iter().map(|m| m["role"].as_str().unwrap_or("")).collect();
     assert_eq!(roles, ["system", "user", "assistant", "user"], "the style example comes before the text");
     assert_eq!(body["messages"][3]["content"], "<text>\nthe meeting are moved\n</text>");
+    assert_eq!((body["temperature"].as_f64(), body.get("seed")), (Some(0.2), None), "a first try stays close");
+}
+
+#[test]
+fn a_retry_samples_with_more_freedom_a_new_seed_and_the_answer_to_move_away_from() {
+    let retry = Retry { previous: Some("The meeting moved to Tuesday.".into()) };
+    let body = |retry: &Retry| {
+        let (endpoint, request) = stub("200 OK", r#"{"choices":[{"message":{"content":"Tuesday it is."}}]}"#);
+        let answer =
+            rewrite(&endpoint, "m", None, &Style::Clear, "meeting moved", Some(retry), &Cancel::default(), &|_| {});
+        assert_eq!(answer, Ok("Tuesday it is.".into()));
+        let request = request.recv().expect("request");
+        serde_json::from_str::<Value>(request.split("\r\n\r\n").nth(1).expect("body")).expect("json")
+    };
+    let first = body(&retry);
+    assert_eq!(first["temperature"].as_f64(), Some(RETRY_TEMPERATURE));
+    assert!(first["seed"].is_u64(), "{first}");
+    let user = first["messages"][3]["content"].as_str().expect("user");
+    assert!(user.starts_with("<text>\nmeeting moved\n</text>") && user.contains("The meeting moved to Tuesday."));
+    // After a failure there is no answer to show, but the retry still samples anew.
+    let after_failure = body(&Retry::default());
+    assert_eq!(after_failure["temperature"].as_f64(), Some(RETRY_TEMPERATURE));
+    assert!(!after_failure["messages"][3]["content"].as_str().expect("user").contains("earlier"));
 }
 
 #[test]
 fn server_errors_and_runaway_answers_are_failures() {
     let (endpoint, _) = stub("404 Not Found", r#"{"error":{"message":"model 'nope' not found"}}"#);
     assert_eq!(
-        rewrite(&endpoint, "nope", None, &Style::Clear, "text", &Cancel::default(), &|_| {}),
+        rewrite(&endpoint, "nope", None, &Style::Clear, "text", None, &Cancel::default(), &|_| {})
+            .map_err(|f| f.message),
         Err("The server answered 404 Not Found: model 'nope' not found".into())
     );
     let long = "word ".repeat(200);
     let (endpoint, _) = stub("200 OK", &format!(r#"{{"choices":[{{"message":{{"content":"{long}"}}}}]}}"#));
-    assert!(rewrite(&endpoint, "m", None, &Style::Clear, "hi", &Cancel::default(), &|_| {}).is_err());
+    let failure = rewrite(&endpoint, "m", None, &Style::Clear, "hi", None, &Cancel::default(), &|_| {}).unwrap_err();
+    assert_eq!((failure.kind, failure.dropped), (ErrorKind::TooLong, Some(long.trim().to_string())), "kept for Copy");
 }
 
 #[test]
@@ -160,7 +193,8 @@ fn a_server_error_that_echoes_the_text_is_redacted() {
         local_api_key: None,
     };
     let provider = crate::provider::Provider::Local { endpoint, model: "m".into() };
-    let error = provider.rewrite(&Style::Clear, selected, &Cancel::default(), &env, &|_| {}).answer.unwrap_err();
+    let error = provider.rewrite(&Style::Clear, selected, None, &Cancel::default(), &env, &|_| {}).answer.unwrap_err();
+    let error = error.message;
     assert!(!error.contains(selected) && !error.contains("/Users/ana"), "{error}");
     assert!(error.contains("400 Bad Request"), "{error}");
 }
@@ -180,7 +214,7 @@ fn llama_server_gets_the_key_as_a_bearer_token_and_a_401_names_the_key() {
     let key = ApiKey("s3cret".into());
     let (endpoint, request) = stub("200 OK", r#"{"choices":[{"message":{"content":"Done."}}]}"#);
     assert_eq!(
-        rewrite(&endpoint, "m", Some(&key), &Style::Clear, "done", &Cancel::default(), &|_| {}),
+        rewrite(&endpoint, "m", Some(&key), &Style::Clear, "done", None, &Cancel::default(), &|_| {}),
         Ok("Done.".into())
     );
     assert!(request.recv().expect("request").contains("authorization: Bearer s3cret\r\n"));
@@ -200,10 +234,19 @@ fn only_gguf_paths_are_shortened_for_display() {
 #[test]
 fn a_closed_port_says_the_server_is_not_running() {
     let port = TcpListener::bind("127.0.0.1:0").expect("bind").local_addr().expect("addr").port();
-    let error =
-        rewrite(&format!("http://127.0.0.1:{port}/v1"), "m", None, &Style::Clear, "text", &Cancel::default(), &|_| {})
-            .unwrap_err();
-    assert!(error.contains("Cannot reach"), "{error}");
+    let error = rewrite(
+        &format!("http://127.0.0.1:{port}/v1"),
+        "m",
+        None,
+        &Style::Clear,
+        "text",
+        None,
+        &Cancel::default(),
+        &|_| {},
+    )
+    .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Unreachable);
+    assert!(error.message.contains("Cannot reach"), "{error}");
 }
 
 /// Server-sent events as Ollama, LM Studio and llama-server send them.
@@ -219,7 +262,7 @@ fn sse(deltas: &[&str]) -> String {
 fn a_streamed_answer_reports_the_text_so_far_and_ends_clean() {
     let (endpoint, _) = stub_typed("200 OK", "text/event-stream", &sse(&["```\nHi", " team", ".\n```"]));
     let seen = std::sync::Mutex::new(Vec::new());
-    let answer = rewrite(&endpoint, "m", None, &Style::Clear, "hi team", &Cancel::default(), &|so_far| {
+    let answer = rewrite(&endpoint, "m", None, &Style::Clear, "hi team", None, &Cancel::default(), &|so_far| {
         seen.lock().expect("lock").push(so_far.to_string());
     });
     // Partials are raw; only the final answer loses the fence.
@@ -232,15 +275,21 @@ fn a_streamed_runaway_stops_at_the_cap_and_a_cancel_stops_reading() {
     let chunk = "word ".repeat(50);
     let (endpoint, _) = stub_typed("200 OK", "text/event-stream", &sse(&[chunk.as_str(); 20]));
     let partials = std::sync::atomic::AtomicUsize::new(0);
-    let answer = rewrite(&endpoint, "m", None, &Style::Clear, "hi", &Cancel::default(), &|_| {
+    let answer = rewrite(&endpoint, "m", None, &Style::Clear, "hi", None, &Cancel::default(), &|_| {
         partials.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     });
-    assert!(answer.is_err_and(|e| e.contains("far longer")));
+    let failure = answer.unwrap_err();
+    assert!(failure.message.contains("far longer") && failure.kind == ErrorKind::TooLong);
+    // What arrived up to the cap, so Show answer has the start of it.
+    assert_eq!(failure.dropped, Some(chunk.repeat(2).trim().to_string()));
     // The 400-character cap is passed in the second chunk (250 characters each).
     assert_eq!(partials.load(std::sync::atomic::Ordering::Relaxed), 1);
 
     let (endpoint, _) = stub_typed("200 OK", "text/event-stream", &sse(&["Hi"]));
     let cancel = Cancel::default();
     cancel.cancel();
-    assert_eq!(rewrite(&endpoint, "m", None, &Style::Clear, "hi", &cancel, &|_| {}), Err("Cancelled.".into()));
+    assert_eq!(
+        rewrite(&endpoint, "m", None, &Style::Clear, "hi", None, &cancel, &|_| {}).map_err(|f| f.message),
+        Err("Cancelled.".into())
+    );
 }

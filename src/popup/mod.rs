@@ -333,7 +333,7 @@ impl Popup {
             match effect {
                 Effect::Capture(attempt) => self.capture(attempt),
                 Effect::ShowPopup => self.show(),
-                Effect::Request { attempt, text, style } => self.request(attempt, text, style),
+                Effect::Request { attempt, text, style, retry } => self.request(attempt, text, style, retry),
                 Effect::CancelRequest => {
                     self.cancel.cancel();
                     self.request.cancel();
@@ -358,7 +358,7 @@ impl Popup {
         }
     }
 
-    fn request(&mut self, attempt: Attempt, text: String, style: Style) {
+    fn request(&mut self, attempt: Attempt, text: String, style: Style, retry: Option<provider::Retry>) {
         self.cancel = Cancel::default();
         let (Some(provider), Some(mut env)) = (self.provider.clone(), self.links.as_ref().and_then(|l| l.env.clone()))
         else {
@@ -372,8 +372,8 @@ impl Popup {
         let shared = self.links.as_ref().map(|links| links.shared.clone());
         let (partial, waker) = (self.partial.clone(), self.waker.clone());
         self.request.request(
-            (attempt, provider, style, text, cancel, env, shared, partial, waker),
-            |(attempt, provider, style, text, cancel, mut env, shared, partial, waker)| {
+            (attempt, provider, style, text, retry, cancel, env, shared, partial, waker),
+            |(attempt, provider, style, text, retry, cancel, mut env, shared, partial, waker)| {
                 // In the worker: the Keychain read can show a prompt.
                 if provider.kind() == provider::Kind::Local {
                     env.local_api_key = shared.and_then(|shared| shared.api_key()).map(provider::local::ApiKey);
@@ -386,7 +386,7 @@ impl Popup {
                         wake();
                     }
                 };
-                (attempt, provider.rewrite(&style, &text, &cancel, &env, &on_partial))
+                (attempt, provider.rewrite(&style, &text, retry.as_ref(), &cancel, &env, &on_partial))
             },
         );
     }
@@ -446,8 +446,8 @@ impl Popup {
     fn close(&mut self) {}
 }
 
-/// Popup keys: ⏎ confirms what the popup offers, Esc cancels, ⌘C copies, ⌘R retries, 1–5 pick
-/// a style.
+/// Popup keys: ⏎ confirms what the popup offers, Esc cancels, ⌘C copies, ⌘R retries, ⌘D shows a
+/// dropped answer, 1–5 pick a style.
 pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
     if p.picker.is_some() {
         picker_key(p, ev, tx);
@@ -467,11 +467,14 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
         Key::Enter => match &p.flow.state {
             State::AwaitingConsent { .. } => Event::ConsentGiven,
             State::Notice(_) => Event::Cancel,
+            // A dropped answer is Copy only.
+            State::Previewing { phase: crate::flow::Phase::Dropped(_), .. } => Event::Copy,
             State::Previewing { style, .. } if style.changes_meaning() && !ev.mods.cmd => Event::Copy,
             _ => Event::Replace,
         },
         Key::Command('c') => Event::Copy,
         Key::Command('r') => Event::Retry,
+        Key::Command('d') => Event::ShowDropped,
         Key::Text(key) if !ev.mods.cmd => match digit_index(key) {
             index if index < MAIN.len() => Event::ChangeStyle(MAIN[index].clone()),
             index if index == MAIN.len() => {

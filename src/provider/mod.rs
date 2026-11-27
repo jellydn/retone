@@ -15,7 +15,7 @@ mod login_path;
 pub mod opencode;
 pub mod pi;
 
-use crate::styles::Style;
+use crate::styles::{self, Style};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -95,21 +95,32 @@ impl Provider {
 
     /// Runs one rewrite. Blocking: call it from a worker, never the frame loop. Only the local
     /// provider streams; `on_partial` gets its text so far. CLI answers arrive whole.
-    pub fn rewrite(&self, style: &Style, text: &str, cancel: &Cancel, env: &Env, on_partial: &dyn Fn(&str)) -> Outcome {
+    pub fn rewrite(
+        &self,
+        style: &Style,
+        text: &str,
+        retry: Option<&Retry>,
+        cancel: &Cancel,
+        env: &Env,
+        on_partial: &dyn Fn(&str),
+    ) -> Outcome {
+        // The CLIs take no sampling options, so for them a retry is only the prompt's hint.
+        let prompt = || styles::build_single(style, text, retry.and_then(|retry| retry.previous.as_deref()));
+        let home = &env.home;
         match self {
             Provider::Local { endpoint, model } => Outcome::answer(
-                local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text, cancel, on_partial)
-                    .map_err(|error| redact(&error, text, env.home.to_str())),
+                local::rewrite(endpoint, model, env.local_api_key.as_ref(), style, text, retry, cancel, on_partial)
+                    .map_err(|failure| failure.redacted(text, home.to_str())),
             ),
-            Provider::Pi { model } => pi::rewrite(pi::VERIFIED, &env.pi_program, model, style, text, cancel, &env.home),
+            Provider::Pi { model } => pi::rewrite(pi::VERIFIED, &env.pi_program, model, prompt(), text, cancel, home),
             Provider::OpenCode { model } => {
-                opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, style, text, cancel, &env.home)
+                opencode::rewrite(opencode::VERIFIED, &env.opencode_program, model, prompt(), text, cancel, home)
             }
             Provider::ClaudeCode { model } => {
-                claude::rewrite(claude::VERIFIED, &env.claude_program, model, style, text, cancel, &env.home)
+                claude::rewrite(claude::VERIFIED, &env.claude_program, model, prompt(), text, cancel, home)
             }
             Provider::Codex { model } => {
-                codex::rewrite(codex::VERIFIED, &env.codex_program, model, style, text, cancel, &env.home)
+                codex::rewrite(codex::VERIFIED, &env.codex_program, model, prompt(), text, cancel, home)
             }
         }
     }
@@ -153,16 +164,72 @@ impl Env {
     }
 }
 
+/// A Retry asks for another answer, not the same one again: the local provider samples with more
+/// freedom and a new seed, and every prompt shows the answer the user just saw.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Retry {
+    /// The last answer the user saw; none after a failure.
+    pub previous: Option<String>,
+}
+
+/// Why a rewrite failed, so the popup can say how to fix it and offer the actions that help.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorKind {
+    /// Far longer than the text: the model most often answered the text instead of rewriting it.
+    TooLong,
+    Empty,
+    Timeout,
+    /// The local server does not answer: not running, or stopped.
+    Unreachable,
+    /// Fixed in Settings: an address, an API key, a model ID, or a CLI that is missing or not verified.
+    Setup,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failure {
+    pub kind: ErrorKind,
+    pub message: String,
+    /// The answer a too-long failure dropped, kept in memory only so the user can still copy it.
+    /// A streamed answer stops at the cap, so it can be cut off.
+    pub dropped: Option<String>,
+}
+
+impl Failure {
+    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
+        Self { kind, message: message.into(), dropped: None }
+    }
+
+    pub fn too_long(answer: String) -> Self {
+        Self { kind: ErrorKind::TooLong, message: t!("provider.too_long").into(), dropped: Some(answer) }
+    }
+
+    pub fn cancelled() -> Self {
+        Self::new(ErrorKind::Other, t!("provider.cancelled"))
+    }
+
+    fn redacted(mut self, selected: &str, home: Option<&str>) -> Self {
+        self.message = redact(&self.message, selected, home);
+        self
+    }
+}
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outcome {
-    pub answer: Result<String, String>,
+    pub answer: Result<String, Failure>,
     /// Set when a CLI changed files in its data folders during the run: the adapter must be
     /// turned off. The folder is named for the user; Retone never deletes the CLI's files.
     pub wrote_files: Option<PathBuf>,
 }
 
 impl Outcome {
-    fn answer(answer: Result<String, String>) -> Self {
+    fn answer(answer: Result<String, Failure>) -> Self {
         Self { answer, wrote_files: None }
     }
 }

@@ -1,6 +1,6 @@
 use super::*;
-use crate::provider::{Cancel, claude, codex, opencode, pi};
-use crate::styles::Style;
+use crate::provider::{Cancel, ErrorKind, claude, codex, opencode, pi};
+use crate::styles::{Style, build_single};
 use std::os::unix::fs::PermissionsExt;
 use std::sync::OnceLock;
 
@@ -63,11 +63,14 @@ fn shared_program() -> &'static Path {
 
 const SECRET: &str = "the meeting are moved to tuesday";
 
+fn prompt() -> String {
+    build_single(&Style::Clear, SECRET, None)
+}
+
 #[test]
 fn pi_runs_without_session_or_tools_and_gets_the_text_only_on_stdin() {
     let stub = Stub::new("1.5.2", "echo 'The meeting moved to Tuesday.'");
-    let out =
-        pi::rewrite(pi::VERIFIED, &stub.program, "ollama/qwen", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "ollama/qwen", prompt(), SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out, Outcome { answer: Ok("The meeting moved to Tuesday.".into()), wrote_files: None });
     let argv = stub.record("argv");
     for flag in ["-p", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files"] {
@@ -83,13 +86,31 @@ fn pi_runs_without_session_or_tools_and_gets_the_text_only_on_stdin() {
 }
 
 #[test]
+fn a_cli_retry_shows_the_earlier_answer_in_the_prompt() {
+    let stub = Stub::new("1.5.2", "echo 'Tuesday now.'");
+    let env = crate::provider::Env {
+        home: stub.home.clone(),
+        pi_program: stub.program.clone(),
+        opencode_program: "opencode".into(),
+        claude_program: "claude".into(),
+        codex_program: "codex".into(),
+        local_api_key: None,
+    };
+    let provider = crate::provider::Provider::Pi { model: "m".into() };
+    let retry = crate::provider::Retry { previous: Some("The meeting moved to Tuesday.".into()) };
+    let out = provider.rewrite(&Style::Clear, SECRET, Some(&retry), &Cancel::default(), &env, &|_| {});
+    assert_eq!(out.answer, Ok("Tuesday now.".into()));
+    assert!(stub.record("stdin").contains("<earlier>\nThe meeting moved to Tuesday.\n</earlier>"));
+}
+
+#[test]
 fn opencode_keeps_its_data_in_memory_and_in_the_temp_folder() {
     let stub = Stub::new("2.3.0", "echo 'Done.'");
     let out = opencode::rewrite(
         opencode::VERIFIED,
         &stub.program,
         "opencode/beam-free",
-        &Style::Clear,
+        prompt(),
         SECRET,
         &Cancel::default(),
         &stub.home,
@@ -114,7 +135,7 @@ fn claude_code_runs_without_sessions_tools_or_hooks() {
         &["2.1.66"],
         &stub.program,
         "claude-haiku-5-5",
-        &Style::Clear,
+        prompt(),
         SECRET,
         &Cancel::default(),
         &stub.home,
@@ -135,15 +156,8 @@ fn claude_code_runs_without_sessions_tools_or_hooks() {
 #[test]
 fn codex_runs_ephemeral_read_only_with_memories_off_and_the_prompt_on_stdin() {
     let stub = Stub::new("0.171.0", "echo 'Done.'");
-    let out = codex::rewrite(
-        &["0.171.0"],
-        &stub.program,
-        "gpt-6-luna",
-        &Style::Clear,
-        SECRET,
-        &Cancel::default(),
-        &stub.home,
-    );
+    let out =
+        codex::rewrite(&["0.171.0"], &stub.program, "gpt-6-luna", prompt(), SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out.answer, Ok("Done.".into()));
     let argv = stub.record("argv");
     for flag in [
@@ -168,7 +182,7 @@ fn codex_runs_with_a_private_home_that_has_only_the_login() {
     std::fs::create_dir_all(&user_home).expect("codex home");
     std::fs::write(user_home.join("auth.json"), "{}").expect("auth");
     std::fs::write(user_home.join("config.toml"), "model = \"x\"").expect("config");
-    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", prompt(), SECRET, &Cancel::default(), &stub.home);
     // The child saw only the login copy (and wrote its state) in the private home.
     assert_eq!(out.answer, Ok("auth.json\nstate_5.sqlite".into()));
     assert_eq!(out.wrote_files, None, "the user's Codex home is unchanged");
@@ -182,9 +196,9 @@ fn codex_runs_with_a_private_home_that_has_only_the_login() {
 #[test]
 fn an_adapter_with_no_verified_version_refuses_every_version() {
     let stub = Stub::new("2.1.66", "echo never");
-    let out = claude::rewrite(&[], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = claude::rewrite(&[], &stub.program, "m", prompt(), SECRET, &Cancel::default(), &stub.home);
     assert_eq!(
-        out.answer,
+        out.answer.map_err(|f| f.message),
         Err("Claude Code 2.1.66 is not verified for no-history use. No Claude Code version is verified yet. \
              Choose another provider or keep a verified version."
             .into())
@@ -199,13 +213,14 @@ fn an_unverified_version_is_refused_before_any_request() {
         opencode::VERIFIED,
         &stub.program,
         "opencode/x",
-        &Style::Clear,
+        prompt(),
         SECRET,
         &Cancel::default(),
         &stub.home,
     );
+    assert_eq!(out.answer.as_ref().map_err(|f| f.kind), Err(ErrorKind::Setup), "fixed in Settings");
     assert_eq!(
-        out.answer,
+        out.answer.map_err(|f| f.message),
         Err("OpenCode 2.4.0 is not verified for no-history use. Retone supports OpenCode 2.3.0. \
              Choose another provider or keep a verified version."
             .into())
@@ -218,7 +233,7 @@ fn a_cli_that_writes_into_its_data_folder_is_reported_and_nothing_is_deleted() {
     // The fake home sits next to the stub link. A wrapper that set HOME would be one more new
     // executable for Gatekeeper to scan (see `shared_program`).
     let stub = Stub::new("1.5.2", "echo session > \"$(dirname \"$0\")/home/.pi/agent/sessions/new.jsonl\"; echo ok");
-    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", prompt(), SECRET, &Cancel::default(), &stub.home);
     assert_eq!(out.answer, Ok("ok".into()), "the result still shows");
     assert_eq!(out.wrote_files, Some(stub.home.join(".pi/agent/sessions")));
     assert!(stub.home.join(".pi/agent/sessions/new.jsonl").exists(), "Retone never deletes CLI files");
@@ -233,7 +248,7 @@ fn a_codex_session_in_an_existing_day_folder_is_reported() {
     std::fs::create_dir_all(dir.path().join("home/.codex/sessions/2026/12/01")).expect("later");
     let stub = Stub::new("0.171.0", &format!("echo s > '{}/rollout.jsonl'; echo ok", day.display()));
     let home = dir.path().join("home");
-    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", &Style::Clear, SECRET, &Cancel::default(), &home);
+    let out = codex::rewrite(&["0.171.0"], &stub.program, "m", prompt(), SECRET, &Cancel::default(), &home);
     assert_eq!(out.answer, Ok("ok".into()));
     // Reported as the data folder that holds the change.
     assert_eq!(out.wrote_files, Some(home.join(".codex")));
@@ -249,22 +264,20 @@ fn cancel_kills_the_child_and_errors_are_redacted() {
         flag.cancel();
     });
     let started = rune_core::time::now();
-    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", &Style::Clear, SECRET, &cancel, &stub.home);
-    assert_eq!(out.answer, Err("Cancelled.".into()));
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m", prompt(), SECRET, &cancel, &stub.home);
+    assert_eq!(out.answer.map_err(|f| f.message), Err("Cancelled.".into()));
     assert!(started.elapsed() < Duration::from_secs(5));
 
     let failing = Stub::new("1.5.2", &format!("echo 'Error: bad input {SECRET}' >&2; exit 1"));
-    let out =
-        pi::rewrite(pi::VERIFIED, &failing.program, "m", &Style::Clear, SECRET, &Cancel::default(), &failing.home);
-    assert_eq!(out.answer, Err("Pi failed: bad input [selected text]".into()));
+    let out = pi::rewrite(pi::VERIFIED, &failing.program, "m", prompt(), SECRET, &Cancel::default(), &failing.home);
+    assert_eq!(out.answer.map_err(|f| f.message), Err("Pi failed: bad input [selected text]".into()));
 }
 
 #[test]
 fn model_ids_that_look_like_flags_are_refused() {
     let stub = Stub::new("1.5.2", "echo never");
     for model in ["", "--tools", "a b", "x\ny"] {
-        let out =
-            pi::rewrite(pi::VERIFIED, &stub.program, model, &Style::Clear, SECRET, &Cancel::default(), &stub.home);
+        let out = pi::rewrite(pi::VERIFIED, &stub.program, model, prompt(), SECRET, &Cancel::default(), &stub.home);
         assert!(out.answer.is_err(), "{model:?}");
     }
     assert_eq!(stub.record("stdin"), "");
@@ -287,6 +300,9 @@ fn a_cli_that_fails_its_version_check_says_what_it_printed_not_that_it_is_missin
         "echo 'Warning: a plugin noticed something' >&2\necho 'env: node: No such file or directory' >&2\nexit 127\n",
     )
     .expect("write");
-    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m/x", &Style::Clear, SECRET, &Cancel::default(), &stub.home);
-    assert_eq!(out.answer, Err("Pi was found but did not start: env: node: No such file or directory".into()));
+    let out = pi::rewrite(pi::VERIFIED, &stub.program, "m/x", prompt(), SECRET, &Cancel::default(), &stub.home);
+    assert_eq!(
+        out.answer.map_err(|f| f.message),
+        Err("Pi was found but did not start: env: node: No such file or directory".into())
+    );
 }

@@ -13,7 +13,7 @@
 
 use crate::eval::flag;
 use crate::provider::{Cancel, Env, Kind, Outcome, claude, cli, codex, opencode, pi};
-use crate::styles::Style;
+use crate::styles::{Style, build_single};
 
 /// Sample text only: the check never sends user text.
 const SAMPLE: &str = "hey so the deploy broke because the config had the wrong port, i fixed it now";
@@ -61,8 +61,15 @@ fn run(args: &[String]) -> Result<bool, String> {
             Kind::ClaudeCode => claude::rewrite,
             _ => codex::rewrite,
         };
-        let Outcome { answer, wrote_files } =
-            rewrite(&verified, program, model, &Style::Clear, SAMPLE, &Cancel::default(), &env.home);
+        let Outcome { answer, wrote_files } = rewrite(
+            &verified,
+            program,
+            model,
+            build_single(&Style::Clear, SAMPLE, None),
+            SAMPLE,
+            &Cancel::default(),
+            &env.home,
+        );
         // A failed rewrite did not run the whole path, so it cannot count as a pass.
         match &answer {
             Ok(text) => println!("run {i}/{runs}: ok ({} chars)", text.chars().count()),
