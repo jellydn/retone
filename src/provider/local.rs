@@ -241,6 +241,9 @@ pub fn rewrite(
         "model": model,
         "stream": true,
         "temperature": 0.2,
+        // A model that thinks first took 5 to 50 s a rewrite, and Retone shows only the answer.
+        // llama-server and Ollama turn thinking off for "none"; other servers ignore it.
+        "reasoning_effort": "none",
         "messages": messages(&prompt),
     });
     let mut request = agent(&endpoint).post(format!("{endpoint}/chat/completions"));
