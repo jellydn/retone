@@ -61,6 +61,8 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 ## Screenshots
 
 <div align="center">
+  <img src="docs/screenshots/tldr-example.png" alt="TL;DR of a long selection: a title line, the main point, key takeaways and a closing line" width="440"/>
+  <br/>
   <img src="docs/screenshots/consent-example.png" alt="First-use consent for a provider" width="380"/>
   <img src="docs/screenshots/no-permission-example.png" alt="Clipboard mode without Accessibility" width="380"/>
   <br/>
@@ -124,6 +126,26 @@ Without the permission, Retone works in **clipboard mode**: copy the text first,
 5. To use another provider or model, press **⌘P** (or click the provider label at the top right), choose with **↑/↓** or a number, and press **Enter**. Retone saves the choice for the next rewrite and asks for consent first if that provider and model are new.
 
 Retone does not run when Retone itself is in front, and refuses selections longer than 2,000 characters.
+
+### Right-click menu (macOS Services)
+
+You can use Retone without a hotkey:
+
+1. Select text in an app that supports Services, for example Safari, Chrome, Mail, Notes or TextEdit.
+2. Right-click the selection and choose **Retone: Fix Spelling and Grammar**, **Retone: Improve Writing**, **Retone: Summarize**, **Retone: Bullet Points** or **Retone: TL;DR**. When the menu has many items, macOS puts them under **Services ›**. You can also use the app menu: **App name › Services**.
+3. The popup opens with a preview in that style. You can change to a different style with a number key.
+4. For Summarize and TL;DR, **Enter** copies the result and **⌘Enter** replaces the selection. For the other styles, **Enter** replaces.
+
+**TL;DR** is useful for long text, for example an article in Safari. When the text has about 150 words or more, you get a `TL;DR` line (with the text's own title, if it has one), the main point, key takeaways and one closing line. For a shorter text, you get only the main point in one sentence.
+
+If the items do not show:
+
+- Turn them on in **System Settings → Keyboard → Keyboard Shortcuts → Services → Text**.
+- After you install or move Retone, macOS can need some time to update the menu. Log out and log in again, or run `/System/Library/CoreServices/pbs -update`.
+- Many Electron apps (Slack, VS Code, Discord) do not show Services. Use your hotkey in these apps.
+- Without Accessibility permission, the items still work, but the popup gives only Copy.
+
+You can also give a Services item a keyboard shortcut in the same System Settings pane. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more.
 
 ## Settings
 
