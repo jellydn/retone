@@ -36,7 +36,7 @@ pub const SCENES: &[Scene] = &[
         p.config.theme = Theme::KanagawaLotus;
         previewing(p, Phase::Ready(REWRITE.into()), true);
     }),
-    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all ten chips show.
+    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all eleven chips show.
     ("summary-example", |p| {
         previewing(p, Phase::Ready("The meeting moved to Tuesday; update your calendars.".into()), true);
         p.config.custom_style = "Make it friendly and short.".into();
@@ -52,6 +52,17 @@ pub const SCENES: &[Scene] = &[
         previewing(p, Phase::Ready(long.into()), true);
         if let State::Previewing { style, .. } = &mut p.flow.state {
             *style = Style::Expand;
+        }
+    }),
+    // TL;DR: the full form on a long selection; ↩ copies like Summarize.
+    ("tldr-example", |p| {
+        let tldr = "TL;DR\n\nThe meeting moved to Tuesday, so update your calendars.\n\nKey takeaways:\n\
+                    - New day: The meeting is on Tuesday.\n- Calendars: Everyone should update theirs.\n\n\
+                    The takeaway: Check your calendar for Tuesday.";
+        previewing(p, Phase::Ready(tldr.into()), true);
+        p.config.custom_style = "Make it friendly and short.".into();
+        if let State::Previewing { style, .. } = &mut p.flow.state {
+            *style = Style::Tldr;
         }
     }),
     ("bullets-example", |p| {

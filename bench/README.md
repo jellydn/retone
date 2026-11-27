@@ -37,9 +37,9 @@ Add its ID to `bench/models.txt`, one per line, as the server names it: `user/re
 
 | Column      | Meaning                                                                                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pass        | Answers that met every check of their style: Concise at most 70% of the length, Fix close to the text, Summarize at most half, Expand 120% to 200%, Bullets a list. |
+| Pass        | Answers that met every check of their style: Concise at most 70% of the length, Fix close to the text, Summarize at most half, Expand 120% to 200%, Bullets a list, TL;DR one sentence for a short text or the full form (title line, labeled takeaways, closing line) at most 60% of a long one. |
 | Invented    | Answers with a number the text does not have, or a detail copied from the prompt's example (Safari, login, yesterday, …).                                           |
-| Dropped     | Answers that lost a number of the text. Summarize is not counted, as a summary may leave out details.                                                               |
+| Dropped     | Answers that lost a number of the text. Summarize and TL;DR are not counted, as a summary may leave out details.                                                     |
 | First token | Median time to the first word of the answer. Retone asks the server not to think first (`reasoning_effort: "none"`); a model that thinks anyway is slow here.       |
 | Total (p90) | Median time per rewrite, and the time 90% of rewrites finished in. The first request is not counted, because it can load the model.                                 |
 | RAM         | Resident memory of the server process that holds the model, after the run.                                                                                          |

@@ -45,10 +45,10 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 ## Features
 
 - ⌨️ **Your hotkey**: no default shortcut; record one in Settings, and Retone tests it with you
-- 🖱️ **Right-click menu**: select text, right-click, and pick Retone: Fix Spelling and Grammar, Improve Writing, Summarize or Bullet Points (under Services in some apps); the popup opens with a preview
+- 🖱️ **Right-click menu**: select text, right-click, and pick Retone: Fix Spelling and Grammar, Improve Writing, Summarize, Bullet Points or TL;DR (under Services in some apps); the popup opens with a preview
 - 🎯 **Style shortcuts**: optional, one per style (Settings → Styles), to open the popup in that style
 - 📍 **Popup at the caret**: the popup opens next to your text, or at the mouse pointer when the app does not report a caret
-- ✍️ **Styles**: tones (Clear, Concise, Professional, Technical, Simplify), actions (Fix spelling and grammar, Summarize, Expand, Bullet points), or your own instruction; press a number key to switch. For Summarize and Expand, ↩ copies the result and ⌘↩ replaces the selection
+- ✍️ **Styles**: tones (Clear, Concise, Professional, Technical, Simplify), actions (Fix spelling and grammar, Summarize, Expand, Bullet points, TL;DR), or your own instruction; press a number key to switch (0 is TL;DR, - is your own). For Summarize, Expand and TL;DR, ↩ copies the result and ⌘↩ replaces the selection
 - 👀 **Preview first**: see the rewrite before anything changes; Enter replaces, ⌘C copies, ⌘R retries, Esc cancels
 - 🛡️ **Safe replace**: Retone replaces only when the same app, field and selection are still there; on failure or cancel nothing changes, and your clipboard comes back
 - 🔀 **Switch provider in the popup**: click the provider label or press ⌘P to pick another provider or local model; Retone keeps the choice

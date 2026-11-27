@@ -26,6 +26,11 @@ const FIX_MAX_CHANGE: f64 = 0.35;
 const SUMMARY_MAX_RATIO: f64 = 0.5;
 /// Expand must add wording, but at most twice the length (the user's limit for this action).
 const EXPAND_RATIOS: std::ops::RangeInclusive<f64> = 1.2..=2.0;
+/// A TL;DR of a long text has a title line, a takeaway list and a closing line, so it may be
+/// longer than a summary but must still be clearly shorter than the text.
+const TLDR_MAX_RATIO: f64 = 0.6;
+/// A TL;DR of a short text is one sentence; this leaves room for a long one.
+const TLDR_SHORT_MAX_RATIO: f64 = 0.75;
 /// Two answers closer than this read as the same rewrite.
 const MIN_PAIR_DISTANCE: f64 = 0.1;
 /// The tones together must spread at least this far: some pairs may fairly read alike (a
@@ -33,10 +38,23 @@ const MIN_PAIR_DISTANCE: f64 = 0.1;
 const MIN_MEAN_DISTANCE: f64 = 0.3;
 /// Details of the style examples in `styles.rs`. In an answer to a text without them, the model
 /// copied them from the example: an invented fact.
-const EXAMPLE_DETAILS: [&str; 9] =
-    ["safari", "login", "yesterday", "sam", "thursday", "monday", "wednesday", "changelog", "complaining"];
+const EXAMPLE_DETAILS: [&str; 13] = [
+    "safari",
+    "login",
+    "yesterday",
+    "sam",
+    "thursday",
+    "monday",
+    "wednesday",
+    "changelog",
+    "complaining",
+    "armin",
+    "ronacher",
+    "atelier",
+    "craftsmanship",
+];
 
-const SAMPLES: [(&str, &str); 4] = [
+const SAMPLES: [(&str, &str); 5] = [
     (
         "chat",
         "hey so i looked at the deploy thing and basically it broke because the config file had the wrong port i \
@@ -60,6 +78,21 @@ const SAMPLES: [(&str, &str); 4] = [
          said the new pricing page needs another review because legal hasnt seen the last 2 changes yet. we also \
          talked about moving the weekly sync from tuesday to wednesday at 10am but nobody decided. next call is in 2 \
          weeks, please send your updates before then",
+    ),
+    // Several paragraphs with a title: the only sample long enough for the full TL;DR form.
+    (
+        "report",
+        "Quarterly support review\n\nTicket volume rose 18 percent this quarter, mostly after the March pricing \
+         change. Most new tickets asked how the new plans map to the old ones, and the help page did not answer \
+         that clearly. Average first reply time went from 4 hours to 7 hours, because the team did not grow with \
+         the volume.\n\nThe new chat widget helped. Customers who used it got an answer in about 20 minutes, and \
+         they rated the help higher than email users did. Only 30 percent of customers found the widget, though, \
+         because it is hidden on the billing page.\n\nTwo problems stand out. Refund requests take too long, since \
+         every refund needs a manager's approval, even small ones. And the macros for common questions are out of \
+         date, so agents rewrite the same answers by hand.\n\nFor next quarter, the team proposes three changes: \
+         show the chat widget on every page, let agents approve refunds under 50 dollars without a manager, and \
+         update the macros in the first two weeks. Hiring one more agent would bring the reply time back near 4 \
+         hours, but that needs budget approval.",
     ),
 ];
 
@@ -175,7 +208,8 @@ struct Bench {
     passed: usize,
     errors: usize,
     invented: usize,
-    /// Cells that lost a number the text has; Summarize may fairly drop details, so it is skipped.
+    /// Cells that lost a number the text has; Summarize and TL;DR may fairly drop details, so they are
+    /// skipped.
     dropped: usize,
     kept_checked: usize,
     tone_spread_failures: usize,
@@ -215,7 +249,7 @@ impl Bench {
             if !new_numbers(original, answer).is_empty() || !example_details(original, answer).is_empty() {
                 self.invented += 1;
             }
-            if *style != Style::Summarize {
+            if !matches!(style, Style::Summarize | Style::Tldr) {
                 self.kept_checked += 1;
                 // A number of the text that the answer does not have.
                 if !new_numbers(answer, original).is_empty() {
@@ -388,8 +422,53 @@ fn job_failure(style: &Style, original: &str, answer: &str, ratio: f64, changed:
             percent(*EXPAND_RATIOS.end())
         )),
         Style::Bullets if !is_bullet_list(answer) => Some("Bullets did not answer with a \"- \" list".to_string()),
+        Style::Tldr => tldr_failure(original, answer, ratio),
         _ => None,
     }
+}
+
+/// A TL;DR of a short text may be only its main-point sentence; a long text needs the whole form:
+/// a "TL;DR" line with no made-up title, "Key takeaways:" with as many items as the text's length
+/// calls for, and a closing "The takeaway:" line. Plain text either way.
+fn tldr_failure(original: &str, answer: &str, ratio: f64) -> Option<String> {
+    let percent = |ratio: f64| format!("{:.0}%", ratio * 100.0);
+    let lines: Vec<&str> = answer.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    if lines.iter().any(|line| line.starts_with('#')) || answer.contains("**") {
+        return Some("TL;DR used Markdown headers or bold".to_string());
+    }
+    let Some(range) = Style::tldr_takeaways(original.split_whitespace().count()) else {
+        return (ratio > TLDR_SHORT_MAX_RATIO)
+            .then(|| format!("TL;DR kept {} of a short text (max {})", percent(ratio), percent(TLDR_SHORT_MAX_RATIO)));
+    };
+    if ratio > TLDR_MAX_RATIO {
+        return Some(format!("TL;DR kept {} of the length (max {})", percent(ratio), percent(TLDR_MAX_RATIO)));
+    }
+    let Some(title) = lines.first().and_then(|line| line.strip_prefix("TL;DR")) else {
+        return Some("TL;DR does not start with a \"TL;DR\" line".to_string());
+    };
+    let made_up = words(title).difference(&words(original)).next().is_some();
+    if made_up {
+        return Some(format!("TL;DR made up a title:{title}"));
+    }
+    let start = lines.iter().position(|line| *line == "Key takeaways:");
+    let end = lines.iter().position(|line| line.starts_with("The takeaway:"));
+    let (Some(start), Some(end)) = (start, end) else {
+        return Some("TL;DR lacks \"Key takeaways:\" or \"The takeaway:\"".to_string());
+    };
+    if start < 2 {
+        return Some("TL;DR has no main-point sentence".to_string());
+    }
+    let items = &lines[start + 1..end.max(start + 1)];
+    if !range.contains(&items.len()) {
+        return Some(format!("TL;DR has {} takeaways ({} to {})", items.len(), range.start(), range.end()));
+    }
+    // "- Label: sentence": the label is the text before the first colon. The prompt asks for 1 to 4
+    // words; up to 6 still reads as a label, not a sentence.
+    let labeled = |line: &&str| {
+        let item = line.strip_prefix("- ").unwrap_or(line);
+        item.split_once(':').is_some_and(|(label, _)| label.split_whitespace().count() <= 6)
+    };
+    (!items.iter().all(labeled)).then(|| "TL;DR takeaways lack a short \"Label:\"".to_string())
 }
 
 /// Words per sentence, on average.
@@ -444,6 +523,7 @@ fn word_distance(a: &str, b: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::styles::TLDR_LIST_MIN_WORDS;
 
     #[test]
     fn word_distance_ignores_case_and_punctuation_and_counts_shared_words() {
@@ -492,6 +572,27 @@ mod tests {
             !check(Style::Bullets, "- The deploy broke because the config had the wrong port; add a check.").is_empty()
         );
         assert!(!check(Style::Simplify, original).is_empty(), "unchanged, and no shorter sentences");
+        assert!(check(Style::Tldr, "A wrong port broke the deploy, so add a check.").is_empty(), "short: one sentence");
+        assert!(!check(Style::Tldr, "**The deploy** broke.").is_empty(), "no Markdown");
+
+        // Past TLDR_LIST_MIN_WORDS, the whole form with a fitting number of takeaways.
+        let long_text = [original; 10].join(" ");
+        assert!(long_text.split_whitespace().count() >= TLDR_LIST_MIN_WORDS);
+        let tldr = |title: &str, takeaways: usize| {
+            let items: Vec<String> = (0..takeaways).map(|_| "- Port: The config had the wrong port.".into()).collect();
+            format!(
+                "TL;DR{title}\n\nA wrong port broke the deploy.\n\nKey takeaways:\n{}\n\nThe takeaway: Add a check.",
+                items.join("\n")
+            )
+        };
+        let long_check = |answer: &str| Report::new(&long_text, &[(Style::Tldr, answer.to_string())]).failures;
+        assert!(long_check(&tldr("", 3)).is_empty(), "{:?}", long_check(&tldr("", 3)));
+        assert!(long_check(&tldr(" — The deploy", 4)).is_empty(), "a title from the text");
+        assert_eq!(long_check(&tldr(" — Outage Report", 3)), ["TL;DR made up a title: — Outage Report"]);
+        assert_eq!(long_check(&tldr("", 1)), ["TL;DR has 1 takeaways (3 to 4)"]);
+        let unlabeled = tldr("", 3).replace("- Port: ", "- ");
+        assert_eq!(long_check(&unlabeled), ["TL;DR takeaways lack a short \"Label:\""]);
+        assert!(!long_check("A wrong port broke the deploy; add a check.").is_empty(), "the list is required");
 
         let invented = check(Style::Clear, "The deploy broke because port 8080 was wrong in the config. Add a check.");
         assert_eq!(invented, ["Clear added numbers the text does not have: 8080"]);
