@@ -422,6 +422,14 @@ impl SettingsUi {
         self.sub_page = None;
     }
 
+    /// Saved on its own, and the switch moves only when the write succeeds: `on_service` reads
+    /// the saved value, so the switch must never show Off while requests still get through.
+    pub fn set_services_enabled(&mut self, on: bool) {
+        if self.shared.prefs().set("services_enabled", &serde_json::json!(on)).is_ok() {
+            self.config.services_enabled = on;
+        }
+    }
+
     pub fn set_theme(&mut self, theme: crate::theme::Theme) {
         self.config.theme = theme;
         self.save();
@@ -463,6 +471,7 @@ pub const SCENES: &[Scene] = &[
     ("general", |s| s.recorder = ShortcutRecorderState::new("alt+super+r".parse().ok())),
     ("general-voiceover", |s| s.recorder = ShortcutRecorderState::new("ctrl+alt+shift+super+l".parse().ok())),
     ("general-advanced", |s| s.advanced_open = true),
+    ("general-services-off", |s| s.config.services_enabled = false),
     ("general-theme-open", |s| s.open_select = Some("theme")),
     ("general-light", |s| s.config.theme = crate::theme::Theme::Light),
     ("provider-local", |s| {

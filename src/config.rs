@@ -36,6 +36,8 @@ pub struct Config {
     pub codex_model: String,
     /// Optional absolute path per CLI, by `Kind::key`, for a CLI the login shell cannot find.
     pub cli_programs: BTreeMap<String, String>,
+    /// The right-click (Services) items answer only while this is on. Default on.
+    pub services_enabled: bool,
 }
 
 impl Config {
@@ -56,6 +58,7 @@ impl Config {
             claude_model: text("claude_model"),
             codex_model: text("codex_model"),
             cli_programs: prefs.get("cli_programs").unwrap_or_default(),
+            services_enabled: prefs.get("services_enabled").unwrap_or(true),
         }
     }
 
@@ -76,6 +79,7 @@ impl Config {
             ("claude_model", serde_json::json!(self.claude_model)),
             ("codex_model", serde_json::json!(self.codex_model)),
             ("cli_programs", serde_json::json!(self.cli_programs)),
+            ("services_enabled", serde_json::json!(self.services_enabled)),
         ];
         for (key, value) in fields {
             save(prefs, key, &value).map_err(|e| e.to_string())?;

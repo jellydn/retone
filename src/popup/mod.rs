@@ -143,7 +143,12 @@ impl Popup {
     }
 
     /// A Services menu item: the popup opens in its style with the text the Service sent.
+    /// Ignored while the right-click switch in Settings is off: macOS still shows the items until
+    /// the user hides them in System Settings, as an app cannot hide its own Services items.
     pub fn on_service(&mut self, style_id: &str, text: String, tx: &mut Tx) {
+        if self.links.as_ref().is_some_and(|links| !links.shared.config().services_enabled) {
+            return;
+        }
         let index = crate::styles::PRESETS.iter().position(|style| style.id() == style_id);
         self.open(index, Some(text), tx);
     }
