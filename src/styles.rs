@@ -34,11 +34,15 @@ pub const PRESETS: [Style; 10] = [
 ];
 
 /// The presets before this index change tone and wording; the rest are actions with one job
-/// each. The popup shows them on two rows, and `--eval-styles` checks them apart.
+/// each. `--eval-styles` checks them apart.
 pub const TONES: usize = 5;
 
-// Keys 1–9 and 0 pick the presets and - picks Custom, so there is no key for an eleventh preset.
-const _: () = assert!(PRESETS.len() <= 10);
+/// The styles on the popup's one row, keys 1–5: the same five as the right-click menu
+/// (`scripts/bundle.sh`). The others are behind More, so the row stays short.
+pub const MAIN: [Style; 5] = [Style::Clear, Style::Fix, Style::Summarize, Style::Bullets, Style::Tldr];
+
+// The More list picks its rows with keys 1–9, so it holds at most 9 styles, Custom included.
+const _: () = assert!(PRESETS.len() - MAIN.len() < 9);
 
 /// Below this many words (about one paragraph) a TL;DR is only its main-point sentence: a title,
 /// a list and a closing line would be about as long as the text.

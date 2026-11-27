@@ -36,7 +36,7 @@ pub const SCENES: &[Scene] = &[
         p.config.theme = Theme::KanagawaLotus;
         previewing(p, Phase::Ready(REWRITE.into()), true);
     }),
-    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all eleven chips show.
+    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so More lists it.
     ("summary-example", |p| {
         previewing(p, Phase::Ready("The meeting moved to Tuesday; update your calendars.".into()), true);
         p.config.custom_style = "Make it friendly and short.".into();
@@ -73,6 +73,12 @@ pub const SCENES: &[Scene] = &[
                          every refund needs a manager's approval. The macros are out of date."
                 .into();
         }
+    }),
+    // The More list open over a preview, with Custom set so its last row shows.
+    ("more-example", |p| {
+        previewing(p, Phase::Ready(REWRITE.into()), true);
+        p.config.custom_style = "Make it friendly and short.".into();
+        p.more = Some(0);
     }),
     ("bullets-example", |p| {
         previewing(p, Phase::Ready("- The meeting moved to Tuesday.\n- Please update your calendars.".into()), true);
