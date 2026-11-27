@@ -1,3 +1,16 @@
+## Retone 0.1.0-beta.14 — 2026-11-27
+
+- New **Settings → Provider → Recommended models**: three small local models that passed Retone's style checks on an Apple M1 Max. Fastest: Qwen2.5 3B (0.6 s a rewrite). Smallest download: Llama 3.2 3B (2.0 GB). Best quality: Qwen2.5 7B (99% of the checks). **Use** fills in the model ID for your server (Ollama, Llama.app, llama.cpp or LM Studio); click **Save** to keep it.
+- Local AI now asks the server not to think before it answers (`reasoning_effort: "none"`). Models that think, such as Qwen3.5, Gemma 4 and Granite 4.2, now answer in about 1 s. Before, they took 5 to 50 s, because Retone waits for the thinking to end. LFM2.5 and gpt-oss still think first, and take about 6 s.
+- Expand: after each point of your text, the answer adds one sentence that explains it, and the length now follows your text more closely. In the checks, Qwen2.5 7B passed Expand 92% of the time (before: 25%), and Llama 3.2 3B 92% (before: 67%).
+- For developers: `scripts/model-bench.sh` runs `retone --eval-styles` on each local model and ranks them: fastest, smallest, then best quality ([how to run it](bench/README.md)). `--eval-styles` gets `--runs` and `--json`, and fails a Fix answer that leaves an error unchanged.
+
+Not tested yet in this release: `reasoning_effort` with LM Studio and Ollama (tested with llama-server, which Llama.app also uses; servers that do not know it should ignore it).
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.13 — 2026-11-26
 
 - Clipboard: when an app is slow to answer Retone's ⌘C and the copy lands after Retone stopped waiting, Retone now puts your clipboard back. Before, the selected text could stay on your clipboard. Retone watches for such a late copy for 2 seconds, also after you close the popup.
