@@ -79,19 +79,19 @@ done
 # Ranking. A model qualifies when it answered every request, passed at least 85% of the checks,
 # invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at
 # most $slow_s s per rewrite (median).
-# Fastest: the qualifying model with the lowest median time. Best quality: the highest pass rate
-# (then fewest invented and dropped numbers). Best balance: of the others, the highest pass rate
-# among models at most twice as slow as the fastest.
+# Speed and size come first: fastest is the qualifying model with the lowest median time; smallest,
+# of the others, uses the least memory; quality, of the others, has the highest pass rate (then
+# fewest invented and dropped numbers) among models at most twice as slow as the fastest.
 jq -s '
   def qualifies: .errors == 0 and .pass_rate >= 0.85 and .invented_rate <= 0.05 and .tone_spread_failures == 0 and .total_s <= '"$slow_s"';
   (map(select(qualifies))) as $ok
   | ($ok | min_by(.total_s)) as $fast
-  | ($ok | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
-  | ($ok | map(select(.model != $fast.model and .model != $best.model and .total_s <= 2 * ($fast.total_s // 0)))
-        | sort_by(-.pass_rate, .total_s) | first) as $balance
+  | ($ok | map(select(.model != $fast.model)) | min_by(.ram_gb)) as $small
+  | ($ok | map(select(.model != $fast.model and .model != $small.model and .total_s <= 2 * ($fast.total_s // 0)))
+        | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
   | {date: "'"$date"'",
      top: [($fast | select(.) | {pick: "fastest", model}),
-           ($balance | select(.) | {pick: "balance", model}),
+           ($small | select(.) | {pick: "smallest", model}),
            ($best | select(.) | {pick: "quality", model})],
      models: sort_by(-.pass_rate, .total_s)}
 ' $(ls "$raw"/*.json | grep -v '\.runs\.json$') > "$results.json"

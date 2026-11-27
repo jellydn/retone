@@ -46,8 +46,10 @@ Add its ID to `bench/models.txt`, one per line, as the server names it: `user/re
 
 A model **qualifies** when it answered every request, passed at least 85% of the checks, invented a detail in at most 5% of its answers, kept the five tones apart on every sample, and took at most 5 s per rewrite. The top 3:
 
+Speed and size come first:
+
 - **fastest**: the qualifying model with the lowest median time.
-- **quality**: the highest pass rate, then the fewest invented and dropped details.
-- **balance**: of the other models, the highest pass rate among those at most twice as slow as the fastest.
+- **smallest**: of the others, the one that uses the least memory.
+- **quality**: of the others, the highest pass rate among models at most twice as slow as the fastest.
 
 Times depend on the Mac. Write the Mac and its memory next to a result you share.

@@ -14,7 +14,7 @@ Local models differ a lot in how well they do Retone's styles. A small model can
 
 - `retone --eval-styles` gets `--runs N` and `--json FILE`. The JSON has the pass rate, the share of answers with an invented detail (a new number, or a detail copied from a prompt example) or a dropped number, the length ratio per style, and the first-token and total times. One untimed request runs first, so model load time is not counted.
 - `scripts/model-bench.sh` runs the eval on a list of models (`bench/models.txt`) against any OpenAI-compatible server, adds RAM and file size, and writes `bench/results/DATE.md` and `DATE.json`. A model slower than 5 s per rewrite gets one run only.
-- A model qualifies when it answered every request, passed at least 85% of the checks, invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at most 5 s per rewrite. The top 3 are the fastest, the best balance (highest pass rate at most twice as slow as the fastest) and the best quality (highest pass rate).
+- A model qualifies when it answered every request, passed at least 85% of the checks, invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at most 5 s per rewrite. The top 3 put speed and size first: the fastest, the smallest (least memory) of the others, and the best quality (highest pass rate) of the others among models at most twice as slow as the fastest.
 - The top 3 are a constant in `provider::local` and show in **Settings → Provider → Recommended models**. **Use** fills in the model ID for the current server: `hf.co/ID` for Ollama, the Hugging Face ID for Llama.app and llama-server.
 
 ## Consequences
