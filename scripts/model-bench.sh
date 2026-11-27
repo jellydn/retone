@@ -49,6 +49,7 @@ for model in "$@"; do
   fi
   if [ "$runs" -gt 1 ] && jq -e --argjson slow "$slow_s" '.total_s <= $slow' "$raw/$slug.json" > /dev/null; then
     # Kept only when complete: a stopped run must not leave the one-run result looking like it.
+    rm -f "$raw/$slug.runs.json"
     target/debug/retone --eval-styles --model "$model" --endpoint "$endpoint" --runs "$runs" \
       --json "$raw/$slug.runs.json" > "$raw/$slug.runs.md" || true
     if jq -e --argjson runs "$runs" '.runs == $runs' "$raw/$slug.runs.json" > /dev/null 2>&1; then
