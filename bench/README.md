@@ -43,7 +43,7 @@ Add its ID to `bench/models.txt`, one per line, as the server names it: `user/re
 | Total (p90) | Median time per rewrite, and the time 90% of rewrites finished in. The first request is not counted, because it can load the model.                                 |
 | RAM         | Resident memory of the server process that holds the model, after the run.                                                                                          |
 
-A model **qualifies** when it answered every request, passed at least 85% of the checks and invented a detail in at most 5% of its answers. The top 3:
+A model **qualifies** when it answered every request, passed at least 85% of the checks, invented a detail in at most 5% of its answers, kept the five tones apart on every sample, and took at most 5 s per rewrite. The top 3:
 
 - **fastest**: the qualifying model with the lowest median time.
 - **quality**: the highest pass rate, then the fewest invented and dropped details.

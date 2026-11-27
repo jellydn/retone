@@ -48,8 +48,16 @@ for model in "$@"; do
     continue
   fi
   if [ "$runs" -gt 1 ] && jq -e --argjson slow "$slow_s" '.total_s <= $slow' "$raw/$slug.json" > /dev/null; then
+    # Kept only when complete: a stopped run must not leave the one-run result looking like it.
     target/debug/retone --eval-styles --model "$model" --endpoint "$endpoint" --runs "$runs" \
-      --json "$raw/$slug.json" > "$raw/$slug.md" || true
+      --json "$raw/$slug.runs.json" > "$raw/$slug.runs.md" || true
+    if jq -e --argjson runs "$runs" '.runs == $runs' "$raw/$slug.runs.json" > /dev/null 2>&1; then
+      mv "$raw/$slug.runs.json" "$raw/$slug.json"
+      mv "$raw/$slug.runs.md" "$raw/$slug.md"
+    else
+      echo "   the $runs-run eval did not finish: keeping the 1-run result"
+      rm -f "$raw/$slug.runs.json"
+    fi
   fi
   # The resident memory of the server process that holds this model. Llama.app and a llama-server
   # router start it with `--alias ID`; Ollama does not, so RAM stays empty there.
@@ -66,12 +74,13 @@ for model in "$@"; do
 done
 
 # Ranking. A model qualifies when it answered every request, passed at least 85% of the checks,
-# invented a detail in at most 5% of its answers, and took at most $slow_s s per rewrite (median).
+# invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at
+# most $slow_s s per rewrite (median).
 # Fastest: the qualifying model with the lowest median time. Best quality: the highest pass rate
 # (then fewest invented and dropped numbers). Best balance: of the others, the highest pass rate
 # among models at most twice as slow as the fastest.
 jq -s '
-  def qualifies: .errors == 0 and .pass_rate >= 0.85 and .invented_rate <= 0.05 and .total_s <= '"$slow_s"';
+  def qualifies: .errors == 0 and .pass_rate >= 0.85 and .invented_rate <= 0.05 and .tone_spread_failures == 0 and .total_s <= '"$slow_s"';
   (map(select(qualifies))) as $ok
   | ($ok | min_by(.total_s)) as $fast
   | ($ok | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
@@ -82,7 +91,7 @@ jq -s '
            ($balance | select(.) | {pick: "balance", model}),
            ($best | select(.) | {pick: "quality", model})],
      models: sort_by(-.pass_rate, .total_s)}
-' "$raw"/*.json > "$results.json"
+' $(ls "$raw"/*.json | grep -v '\.runs\.json$') > "$results.json"
 
 {
   echo "# Model bench, $date"
