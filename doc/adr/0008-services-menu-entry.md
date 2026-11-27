@@ -23,3 +23,8 @@ Users want a right-click entry for selected text, like the Scramble browser exte
 - Apps without Services support (many Electron apps) show no items; the hotkey stays the main path.
 - Services need no TCC grant and work with ad-hoc signing.
 - When macOS launches Retone for a service, the request can arrive before the provider is registered. This must be checked on a real Mac.
+
+## Addendum (2026-11-27): turning the items off
+
+- **Settings → General → Right-click menu (macOS Services)**, on by default. While it is off, the provider ignores every Service request, so the items do nothing.
+- An app cannot hide its own Services items. Changing Info.plist would break the bundle signature. On macOS 26.6.2, writing the per-user `NSServicesStatus` entries in `pbs.plist`, then running `pbs -update`, `pbs -flush` and restarting `pbs`, did not hide even Apple's own Stickies item from TextEdit's Services menu. So with the switch off, Settings shows **Open Keyboard Settings**, where the user turns the Retone items off under Keyboard Shortcuts › Services › Text. This works the same with ad-hoc signing.

@@ -209,6 +209,29 @@ fn advanced(s: &SettingsUi, k: &Kit, rows: Vec<El>) -> El {
     col().key("advanced").w_full().gap(8.0).child(header).children(open.then(|| card(k, "advanced-card", rows)))
 }
 
+/// macOS has no API for an app to hide its own Services items, so the user hides them in
+/// System Settings › Keyboard › Keyboard Shortcuts › Services › Text.
+fn hide_services_row(k: &Kit) -> El {
+    let open = Button::new(t!("settings.services.open"))
+        .variant(ButtonVariant::Outline)
+        .on_press(|_: &mut SettingsUi| {
+            #[cfg(target_os = "macos")]
+            crate::mac::permissions::open_url(KEYBOARD_PANE);
+        })
+        .build(k);
+    setting(
+        k,
+        "services-hide",
+        &glyphs::EYE_OFF,
+        t!("settings.services.hide"),
+        help(k, t!("settings.services.hide_help")),
+        open,
+    )
+}
+
+#[cfg(target_os = "macos")]
+const KEYBOARD_PANE: &str = "x-apple.systempreferences:com.apple.Keyboard-Settings.extension";
+
 /// A row's switch. On a light card the kit's off track (`layer_04`) is nearly the card's white,
 /// so light themes draw it with the border colour instead.
 fn row_switch(k: &Kit, on: bool, flip: impl Fn(&mut SettingsUi) + 'static) -> El {
@@ -319,6 +342,11 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
         None => help(k, t!("settings.login_help")),
     };
     let login = row_switch(k, s.launch_at_login, |s: &mut SettingsUi| s.set_launch_at_login(!s.launch_at_login));
+    let services = row_switch(k, s.config.services_enabled, |s: &mut SettingsUi| {
+        s.set_services_enabled(!s.config.services_enabled)
+    });
+    let services_help =
+        if s.config.services_enabled { t!("settings.services.on_help") } else { t!("settings.services.off_help") };
     col()
         .w_full()
         .gap(16.0)
@@ -340,7 +368,18 @@ fn general_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
                 setting(k, "theme", &THEME, t!("settings.theme"), None, theme_picker),
                 setting(k, "accessibility", &ACCESSIBILITY, t!("settings.access.title"), access_help, access_control),
                 setting(k, "login", &POWER, t!("settings.login"), login_help, login),
-            ],
+                setting(
+                    k,
+                    "services",
+                    &glyphs::SPARKLE,
+                    t!("settings.services.title"),
+                    help(k, services_help),
+                    services,
+                ),
+            ]
+            .into_iter()
+            .chain((!s.config.services_enabled).then(|| hide_services_row(k)))
+            .collect(),
         ))
         .child(advanced(
             s,

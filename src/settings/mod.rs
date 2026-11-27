@@ -422,6 +422,11 @@ impl SettingsUi {
         self.sub_page = None;
     }
 
+    pub fn set_services_enabled(&mut self, on: bool) {
+        self.config.services_enabled = on;
+        self.save();
+    }
+
     pub fn set_theme(&mut self, theme: crate::theme::Theme) {
         self.config.theme = theme;
         self.save();
@@ -463,6 +468,7 @@ pub const SCENES: &[Scene] = &[
     ("general", |s| s.recorder = ShortcutRecorderState::new("alt+super+r".parse().ok())),
     ("general-voiceover", |s| s.recorder = ShortcutRecorderState::new("ctrl+alt+shift+super+l".parse().ok())),
     ("general-advanced", |s| s.advanced_open = true),
+    ("general-services-off", |s| s.config.services_enabled = false),
     ("general-theme-open", |s| s.open_select = Some("theme")),
     ("general-light", |s| s.config.theme = crate::theme::Theme::Light),
     ("provider-local", |s| {

@@ -138,6 +138,8 @@ You can use Retone without a hotkey:
 
 **TL;DR** is useful for long text, for example an article in Safari. When the text has about 150 words or more, you get a `TL;DR` line (with the text's own title, if it has one), the main point, key takeaways and one closing line. For a shorter text, you get only the main point in one sentence.
 
+To turn the items off, turn off **Settings → General → Right-click menu (macOS Services)**. Retone then ignores them. macOS does not let an app hide its own Services items, so to remove them from the menu, click **Open Keyboard Settings**, then **Keyboard Shortcuts › Services › Text**, and turn off the Retone items.
+
 If the items do not show:
 
 - Turn them on in **System Settings → Keyboard → Keyboard Shortcuts → Services → Text**.
