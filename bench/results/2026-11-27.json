@@ -1,0 +1,721 @@
+{
+  "date": "2026-11-27",
+  "top": [
+    {
+      "pick": "fastest",
+      "model": "Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"
+    },
+    {
+      "pick": "balance",
+      "model": "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M"
+    },
+    {
+      "pick": "quality",
+      "model": "Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
+    }
+  ],
+  "models": [
+    {
+      "cells": 108,
+      "dropped_rate": 0.03125,
+      "errors": 0,
+      "first_token_s": 0.195709541,
+      "invented_rate": 0.0,
+      "model": "Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
+      "pass_rate": 0.9444444444444444,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.7848101265822784,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.9968354430379747,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5151515151515151,
+          "pass_rate": 0.9166666666666666
+        },
+        "expand": {
+          "length_ratio": 1.4493670886075949,
+          "pass_rate": 0.5833333333333334
+        },
+        "fix": {
+          "length_ratio": 1.0085287846481876,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 0.8636363636363636,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.4393939393939394,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.42134831460674155,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 0.8333333333333334,
+          "pass_rate": 1.0
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 3.444024292,
+      "total_s": 1.2759672499999999,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 5.2137908935546875,
+      "file_gb": 4.683073632
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.0625,
+      "errors": 0,
+      "first_token_s": 0.205015083,
+      "invented_rate": 0.0,
+      "model": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M",
+      "pass_rate": 0.9351851851851852,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.8336886993603412,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 1.101123595505618,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5112359550561798,
+          "pass_rate": 1.0
+        },
+        "expand": {
+          "length_ratio": 1.8370786516853932,
+          "pass_rate": 0.5833333333333334
+        },
+        "fix": {
+          "length_ratio": 1.0112359550561798,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.2473347547974414,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.5112359550561798,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.27531645569620256,
+          "pass_rate": 0.8333333333333334
+        },
+        "technical": {
+          "length_ratio": 1.0106609808102345,
+          "pass_rate": 1.0
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 3.732914583,
+      "total_s": 1.445567209,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 6.4153900146484375,
+      "file_gb": 4.920739232
+    },
+    {
+      "cells": 36,
+      "dropped_rate": 0.0,
+      "errors": 0,
+      "first_token_s": 5.726627167,
+      "invented_rate": 0.08333333333333333,
+      "model": "LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M",
+      "pass_rate": 0.9166666666666666,
+      "runs": 1,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.8434343434343434,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.9145569620253164,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.48314606741573035,
+          "pass_rate": 1.0
+        },
+        "expand": {
+          "length_ratio": 1.6360759493670887,
+          "pass_rate": 1.0
+        },
+        "fix": {
+          "length_ratio": 1.0021321961620469,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.1684434968017057,
+          "pass_rate": 0.75
+        },
+        "simplify": {
+          "length_ratio": 0.7878787878787878,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.31645569620253167,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 1.1321961620469083,
+          "pass_rate": 0.5
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 13.565920583,
+      "total_s": 6.400372209,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 2.1649627685546875,
+      "file_gb": 1.67445504
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.0,
+      "errors": 0,
+      "first_token_s": 6.524803125,
+      "invented_rate": 0.009259259259259259,
+      "model": "unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
+      "pass_rate": 0.9166666666666666,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9494949494949495,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.8737373737373737,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5707070707070707,
+          "pass_rate": 0.5833333333333334
+        },
+        "expand": {
+          "length_ratio": 1.8932584269662922,
+          "pass_rate": 0.75
+        },
+        "fix": {
+          "length_ratio": 1.0112359550561798,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.1279317697228144,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.7777777777777778,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.3603411513859275,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 1.138592750533049,
+          "pass_rate": 0.9166666666666666
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 18.447563333,
+      "total_s": 7.463633417,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 7.89453125,
+      "file_gb": 4.977171584
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.09375,
+      "errors": 0,
+      "first_token_s": 0.094161041,
+      "invented_rate": 0.027777777777777776,
+      "model": "Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M",
+      "pass_rate": 0.8981481481481481,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.7727272727272727,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.8651685393258427,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.3181818181818182,
+          "pass_rate": 1.0
+        },
+        "expand": {
+          "length_ratio": 1.1364605543710022,
+          "pass_rate": 0.3333333333333333
+        },
+        "fix": {
+          "length_ratio": 1.0112359550561798,
+          "pass_rate": 0.75
+        },
+        "professional": {
+          "length_ratio": 1.0786516853932584,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.5505050505050505,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.373134328358209,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 0.7415730337078652,
+          "pass_rate": 1.0
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 1.611903833,
+      "total_s": 0.622466708,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 2.5810546875,
+      "file_gb": 2.104932768
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.07291666666666667,
+      "errors": 0,
+      "first_token_s": 0.109387208,
+      "invented_rate": 0.027777777777777776,
+      "model": "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",
+      "pass_rate": 0.8981481481481481,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9393939393939394,
+          "pass_rate": 0.9166666666666666
+        },
+        "clear": {
+          "length_ratio": 1.1215351812366738,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5158227848101266,
+          "pass_rate": 0.75
+        },
+        "expand": {
+          "length_ratio": 1.4904051172707888,
+          "pass_rate": 0.6666666666666666
+        },
+        "fix": {
+          "length_ratio": 1.0112359550561798,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.232409381663113,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.6235955056179775,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.3383838383838384,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 0.9317697228144989,
+          "pass_rate": 0.75
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 1.845862375,
+      "total_s": 0.771993583,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 3.49664306640625,
+      "file_gb": 2.019377696
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.042105263157894736,
+      "errors": 1,
+      "first_token_s": 0.108277583,
+      "invented_rate": 0.0,
+      "model": "bartowski/microsoft_Phi-4-mini-instruct-GGUF:Q4_K_M",
+      "pass_rate": 0.8981481481481481,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9343434343434344,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.9269662921348315,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.4696969696969697,
+          "pass_rate": 0.8333333333333334
+        },
+        "expand": {
+          "length_ratio": 1.211087420042644,
+          "pass_rate": 0.5833333333333334
+        },
+        "fix": {
+          "length_ratio": 1.0101010101010102,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.0788912579957357,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.7222222222222222,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.4690831556503198,
+          "pass_rate": 0.6666666666666666
+        },
+        "technical": {
+          "length_ratio": 1.0554371002132197,
+          "pass_rate": 1.0
+        }
+      },
+      "tone_spread_failures": 1,
+      "total_p90_s": 1.987283833,
+      "total_s": 0.802878375,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 3.8492431640625,
+      "file_gb": 2.491874688
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.0,
+      "errors": 0,
+      "first_token_s": 0.118176541,
+      "invented_rate": 0.027777777777777776,
+      "model": "unsloth/Qwen3-4B-Instruct-2507-GGUF:Q4_K_M",
+      "pass_rate": 0.8888888888888888,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9525316455696202,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.9191919191919192,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.4393939393939394,
+          "pass_rate": 1.0
+        },
+        "expand": {
+          "length_ratio": 1.6044303797468353,
+          "pass_rate": 0.5
+        },
+        "fix": {
+          "length_ratio": 1.0106609808102345,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.185501066098081,
+          "pass_rate": 1.0
+        },
+        "simplify": {
+          "length_ratio": 0.6868686868686869,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.36363636363636365,
+          "pass_rate": 0.75
+        },
+        "technical": {
+          "length_ratio": 0.9786780383795309,
+          "pass_rate": 0.75
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 2.024800166,
+      "total_s": 0.763459417,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 4.4913787841796875,
+      "file_gb": 2.49728112
+    },
+    {
+      "cells": 36,
+      "dropped_rate": 0.03125,
+      "errors": 0,
+      "first_token_s": 5.089151917,
+      "invented_rate": 0.05555555555555555,
+      "model": "unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
+      "pass_rate": 0.8611111111111112,
+      "runs": 1,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.898989898989899,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 0.8686868686868687,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.6464646464646465,
+          "pass_rate": 0.75
+        },
+        "expand": {
+          "length_ratio": 1.6717171717171717,
+          "pass_rate": 0.75
+        },
+        "fix": {
+          "length_ratio": 1.0224719101123596,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.1515151515151516,
+          "pass_rate": 0.75
+        },
+        "simplify": {
+          "length_ratio": 0.6329113924050633,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.2303370786516854,
+          "pass_rate": 0.75
+        },
+        "technical": {
+          "length_ratio": 1.0454545454545454,
+          "pass_rate": 0.75
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 8.496087375,
+      "total_s": 5.490629625,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 4.58367919921875,
+      "file_gb": 3.106738272
+    },
+    {
+      "cells": 108,
+      "dropped_rate": 0.05319148936170213,
+      "errors": 2,
+      "first_token_s": 0.097656042,
+      "invented_rate": 0.07547169811320754,
+      "model": "mistralai/Ministral-3-3B-Instruct-2512-GGUF:Q4_K_M",
+      "pass_rate": 0.8148148148148148,
+      "runs": 3,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9113924050632911,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 1.095505617977528,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5202020202020202,
+          "pass_rate": 0.5833333333333334
+        },
+        "expand": {
+          "length_ratio": 1.7272727272727273,
+          "pass_rate": 0.75
+        },
+        "fix": {
+          "length_ratio": 0.990506329113924,
+          "pass_rate": 1.0
+        },
+        "professional": {
+          "length_ratio": 1.3198294243070363,
+          "pass_rate": 0.9166666666666666
+        },
+        "simplify": {
+          "length_ratio": 0.7777777777777778,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.4200426439232409,
+          "pass_rate": 0.8333333333333334
+        },
+        "technical": {
+          "length_ratio": 1.7341772151898733,
+          "pass_rate": 0.25
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 2.30917725,
+      "total_s": 0.779353167,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 4.3641510009765625,
+      "file_gb": 2.147023008
+    },
+    {
+      "cells": 36,
+      "dropped_rate": 0.0625,
+      "errors": 0,
+      "first_token_s": 9.512952708,
+      "invented_rate": 0.16666666666666666,
+      "model": "LiquidAI/LFM3-1.7B-GGUF:Q4_K_M",
+      "pass_rate": 0.6666666666666666,
+      "runs": 1,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9620253164556962,
+          "pass_rate": 1.0
+        },
+        "clear": {
+          "length_ratio": 1.0,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.42424242424242425,
+          "pass_rate": 0.75
+        },
+        "expand": {
+          "length_ratio": 0.16631130063965885,
+          "pass_rate": 0.0
+        },
+        "fix": {
+          "length_ratio": 1.0101010101010102,
+          "pass_rate": 0.25
+        },
+        "professional": {
+          "length_ratio": 1.1663113006396588,
+          "pass_rate": 0.5
+        },
+        "simplify": {
+          "length_ratio": 0.9696969696969697,
+          "pass_rate": 1.0
+        },
+        "summarize": {
+          "length_ratio": 0.28164556962025317,
+          "pass_rate": 1.0
+        },
+        "technical": {
+          "length_ratio": 1.1791044776119404,
+          "pass_rate": 0.5
+        }
+      },
+      "tone_spread_failures": 0,
+      "total_p90_s": 30.525395709,
+      "total_s": 10.0188585,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 2.3475341796875,
+      "file_gb": 1.099627808
+    },
+    {
+      "cells": 36,
+      "dropped_rate": 0.047619047619047616,
+      "errors": 13,
+      "first_token_s": 27.271921833,
+      "invented_rate": 0.0,
+      "model": "ibm-granite/granite-4.2-3b-GGUF:Q4_K_M",
+      "pass_rate": 0.6111111111111112,
+      "runs": 1,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.9850746268656716,
+          "pass_rate": 0.75
+        },
+        "clear": {
+          "length_ratio": 0.9646464646464646,
+          "pass_rate": 1.0
+        },
+        "concise": {
+          "length_ratio": 0.5707070707070707,
+          "pass_rate": 0.25
+        },
+        "expand": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.25
+        },
+        "fix": {
+          "length_ratio": 1.004264392324094,
+          "pass_rate": 0.75
+        },
+        "professional": {
+          "length_ratio": 1.1002132196162047,
+          "pass_rate": 0.75
+        },
+        "simplify": {
+          "length_ratio": 0.7070707070707071,
+          "pass_rate": 0.75
+        },
+        "summarize": {
+          "length_ratio": 0.3006396588486141,
+          "pass_rate": 0.5
+        },
+        "technical": {
+          "length_ratio": 1.0561797752808988,
+          "pass_rate": 0.5
+        }
+      },
+      "tone_spread_failures": 2,
+      "total_p90_s": 51.908436917,
+      "total_s": 28.067288958,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 6.1510467529296875,
+      "file_gb": 2.244011552
+    },
+    {
+      "cells": 36,
+      "dropped_rate": 0.0,
+      "errors": 35,
+      "first_token_s": 48.024083084,
+      "invented_rate": 0.0,
+      "model": "ggml-org/Qwen3.5-4B-GGUF:Q4_K_M",
+      "pass_rate": 0.027777777777777776,
+      "runs": 1,
+      "styles": {
+        "bullets": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "clear": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "concise": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "expand": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "fix": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "professional": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "simplify": {
+          "length_ratio": 0.8314606741573034,
+          "pass_rate": 0.25
+        },
+        "summarize": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        },
+        "technical": {
+          "length_ratio": 0.0,
+          "pass_rate": 0.0
+        }
+      },
+      "tone_spread_failures": 39,
+      "total_p90_s": 48.6888475,
+      "total_s": 48.6888475,
+      "endpoint": "http://127.0.0.1:9940/v1",
+      "ram_gb": 4.229400634765625,
+      "file_gb": 3.032091584
+    }
+  ]
+}
