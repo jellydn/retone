@@ -221,6 +221,11 @@ fn llama_server_gets_the_key_as_a_bearer_token_and_a_401_names_the_key() {
     let (endpoint, _) = stub("401 Unauthorized", r#"{"error":{"message":"Invalid API Key","code":401}}"#);
     let error = list_models(&endpoint, false, None).unwrap_err();
     assert!(error.contains("needs an API key"), "{error}");
+    // A proxy's HTML page keeps the 401, so the popup still offers Settings.
+    let (endpoint, _) = stub_typed("401 Unauthorized", "text/html", "<html>Unauthorized</html>");
+    let failure = rewrite(&endpoint, "m", None, &Style::Clear, "done", None, &Cancel::default(), &|_| {}).unwrap_err();
+    assert_eq!(failure.kind, ErrorKind::Setup);
+    assert!(failure.message.contains("needs an API key"), "{failure}");
     assert_eq!(format!("{key:?}"), "ApiKey(***)", "Debug never shows the key");
 }
 

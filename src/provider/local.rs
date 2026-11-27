@@ -269,10 +269,12 @@ pub fn rewrite(
     let status = response.status();
     let streamed = response.body().mime_type() == Some("text/event-stream");
     if !status.is_success() || !streamed {
-        let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
+        let body = response.body_mut().with_config().limit(BODY_LIMIT).read_json::<Value>();
         if !status.is_success() {
-            return Err(status_failure(status, &body));
+            // A proxy or server can send an HTML error page; the status still says what to fix.
+            return Err(status_failure(status, &body.unwrap_or(Value::Null)));
         }
+        let body = body.map_err(|_| bad_answer())?;
         let answer = body["choices"][0]["message"]["content"].as_str().ok_or_else(bad_answer)?;
         return finish(answer, text);
     }

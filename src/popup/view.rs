@@ -397,7 +397,11 @@ fn hint(p: &Popup, failure: &Failure) -> String {
 /// The actions that can fix this kind of failure; the last one is the main one. Retry stays on
 /// every kind, as a retry samples a new answer.
 fn failure_actions(k: &Kit, kind: ErrorKind) -> Vec<El> {
-    let retry = |variant| action(t!("popup.retry"), "⌘R", variant, || Event::Retry, k);
+    // The main action, the last one, is also on ↩.
+    let retry = |variant| {
+        let shortcut = if variant == ButtonVariant::Contrast { "↩" } else { "⌘R" };
+        action(t!("popup.retry"), shortcut, variant, || Event::Retry, k)
+    };
     let switch_model = || {
         Button::new(t!("popup.switch_model"))
             .variant(ButtonVariant::Ghost)
@@ -413,8 +417,10 @@ fn failure_actions(k: &Kit, kind: ErrorKind) -> Vec<El> {
             .build(k)
     };
     let open_settings = |variant| {
+        let shortcut = if variant == ButtonVariant::Contrast { "↩" } else { "" };
         Button::new(t!("popup.open_settings"))
             .variant(variant)
+            .shortcut(shortcut)
             .on_press_tx(|p: &mut Popup, tx: &mut Tx| p.open_settings(tx))
             .build(k)
     };
@@ -423,7 +429,7 @@ fn failure_actions(k: &Kit, kind: ErrorKind) -> Vec<El> {
             other_style(),
             switch_model(),
             retry(ButtonVariant::Ghost),
-            action(t!("popup.show_dropped"), "⌘D", ButtonVariant::Neutral, || Event::ShowDropped, k),
+            action(t!("popup.show_dropped"), "↩", ButtonVariant::Contrast, || Event::ShowDropped, k),
         ],
         ErrorKind::Unreachable => {
             vec![open_settings(ButtonVariant::Ghost), switch_model(), retry(ButtonVariant::Contrast)]
@@ -544,6 +550,21 @@ mod tests {
         key(&mut p, rune::Key::Escape);
         assert!(p.more.is_none());
         assert!(matches!(&p.flow.state, State::Previewing { style: Style::Concise, .. }), "Esc keeps the style");
+    }
+
+    #[test]
+    fn return_runs_the_main_action_of_a_failure() {
+        let enter = |failure: crate::provider::Failure| {
+            let mut p = previewing(Phase::Failed(failure), true);
+            let ev = rune::KeyEvent { key: rune::Key::Enter, mods: rune::Mods::default() };
+            super::super::on_key(&mut p, &ev, &mut Tx::default());
+            p.flow.state
+        };
+        let retried = enter(Failure::new(ErrorKind::Timeout, "slow"));
+        assert!(matches!(retried, State::Previewing { phase: Phase::Loading, .. }), "↩ retries");
+        let shown = enter(Failure::too_long("- An answer.".into()));
+        assert!(matches!(shown, State::Previewing { phase: Phase::Dropped(_), .. }), "↩ shows the dropped answer");
+        assert_eq!(enter(Failure::new(ErrorKind::Setup, "key")), State::Idle, "↩ opens Settings and closes");
     }
 
     #[test]

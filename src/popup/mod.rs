@@ -469,6 +469,15 @@ pub fn on_key(p: &mut Popup, ev: &KeyEvent, tx: &mut Tx) -> bool {
             State::Notice(_) => Event::Cancel,
             // A dropped answer is Copy only.
             State::Previewing { phase: crate::flow::Phase::Dropped(_), .. } => Event::Copy,
+            // The main action of the failure, as `view::failure_actions` shows it last.
+            State::Previewing { phase: crate::flow::Phase::Failed(failure), .. } => match failure.kind {
+                provider::ErrorKind::TooLong => Event::ShowDropped,
+                provider::ErrorKind::Setup => {
+                    p.open_settings(tx);
+                    return true;
+                }
+                _ => Event::Retry,
+            },
             State::Previewing { style, .. } if style.changes_meaning() && !ev.mods.cmd => Event::Copy,
             _ => Event::Replace,
         },
