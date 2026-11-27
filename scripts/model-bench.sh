@@ -119,7 +119,7 @@ jq -s '
   echo
   echo "Pass: answers that met every check of their style. Failed: requests with no answer, mostly the 60 s limit."
   echo "Invented: answers with a number the text does not have, or a detail copied from the prompt's example."
-  echo "Dropped: answers that lost a number of the text (Summarize is not counted). Concise and Expand: median length"
+  echo "Dropped: answers that lost a number of the text (Summarize and TL;DR are not counted). Concise and Expand: median length"
   echo "against the text (targets: at most 70%, and 120% to 200%). A model slower than $slow_s s per rewrite gets 1 run only."
   echo
   echo "## Top 3"

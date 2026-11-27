@@ -36,7 +36,7 @@ pub const SCENES: &[Scene] = &[
         p.config.theme = Theme::KanagawaLotus;
         previewing(p, Phase::Ready(REWRITE.into()), true);
     }),
-    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all ten chips show.
+    // Summarize: ↩ copies, Replace moves to ⌘↩; Custom set, so all eleven chips show.
     ("summary-example", |p| {
         previewing(p, Phase::Ready("The meeting moved to Tuesday; update your calendars.".into()), true);
         p.config.custom_style = "Make it friendly and short.".into();
@@ -52,6 +52,26 @@ pub const SCENES: &[Scene] = &[
         previewing(p, Phase::Ready(long.into()), true);
         if let State::Previewing { style, .. } = &mut p.flow.state {
             *style = Style::Expand;
+        }
+    }),
+    // TL;DR: the full form on a long selection (only its first lines show); ↩ copies like Summarize.
+    ("tldr-example", |p| {
+        let tldr = "TL;DR — Quarterly support review\n\nSupport slowed as tickets rose after the pricing change, \
+                    and three fixes could bring reply times back down.\n\nKey takeaways:\n\
+                    - More tickets: Volume rose 18 percent, mostly about the new plans.\n\
+                    - Slower replies: First replies went from 4 to 7 hours.\n\
+                    - Hidden chat: The widget helps, but most customers never find it.\n\
+                    - Slow refunds: Every refund needs a manager.\n\nThe takeaway: Show the chat widget \
+                    everywhere, let agents approve small refunds and update the macros.";
+        previewing(p, Phase::Ready(tldr.into()), true);
+        p.config.custom_style = "Make it friendly and short.".into();
+        if let State::Previewing { style, original, .. } = &mut p.flow.state {
+            *style = Style::Tldr;
+            *original = "Quarterly support review. Ticket volume rose 18 percent this quarter, mostly after the \
+                         March pricing change. Average first reply time went from 4 hours to 7 hours. The new chat \
+                         widget helped, but it is hidden on the billing page. Refund requests take too long, since \
+                         every refund needs a manager's approval. The macros are out of date."
+                .into();
         }
     }),
     ("bullets-example", |p| {

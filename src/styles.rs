@@ -13,13 +13,14 @@ pub enum Style {
     Summarize,
     Expand,
     Bullets,
+    Tldr,
     /// The user's own instruction, from Settings.
     Custom(String),
 }
 
 /// In picker order: the tones first, then the actions. Prefs save style ids, so the order can
 /// change.
-pub const PRESETS: [Style; 9] = [
+pub const PRESETS: [Style; 10] = [
     Style::Clear,
     Style::Concise,
     Style::Professional,
@@ -29,14 +30,19 @@ pub const PRESETS: [Style; 9] = [
     Style::Summarize,
     Style::Expand,
     Style::Bullets,
+    Style::Tldr,
 ];
 
 /// The presets before this index change tone and wording; the rest are actions with one job
 /// each. The popup shows them on two rows, and `--eval-styles` checks them apart.
 pub const TONES: usize = 5;
 
-// Keys 1–9 pick the presets and 0 picks Custom, so there is no key for a tenth preset.
-const _: () = assert!(PRESETS.len() <= 9);
+// Keys 1–9 and 0 pick the presets and - picks Custom, so there is no key for an eleventh preset.
+const _: () = assert!(PRESETS.len() <= 10);
+
+/// Below this many words (about one paragraph) a TL;DR is only its main-point sentence: a title,
+/// a list and a closing line would be about as long as the text.
+pub const TLDR_LIST_MIN_WORDS: usize = 150;
 
 impl Style {
     /// The key prefs save for this style. Never change one: a saved default or shortcut would
@@ -52,6 +58,7 @@ impl Style {
             Style::Summarize => "summarize",
             Style::Expand => "expand",
             Style::Bullets => "bullets",
+            Style::Tldr => "tldr",
             Style::Custom(_) => "custom",
         }
     }
@@ -67,6 +74,7 @@ impl Style {
             Style::Summarize => t!("style.summarize"),
             Style::Expand => t!("style.expand"),
             Style::Bullets => t!("style.bullets"),
+            Style::Tldr => t!("style.tldr"),
             Style::Custom(_) => t!("style.custom"),
         }
     }
@@ -74,7 +82,17 @@ impl Style {
     /// A summary drops details and an expansion adds wording: the user more often wants a copy
     /// than the selection replaced, so ↩ copies and Replace moves to ⌘↩.
     pub fn changes_meaning(&self) -> bool {
-        matches!(self, Style::Summarize | Style::Expand)
+        matches!(self, Style::Summarize | Style::Expand | Style::Tldr)
+    }
+
+    /// How many "Key takeaways" a TL;DR of a text this long has; None for a text so short that
+    /// the TL;DR is only its main-point sentence. The prompt and `--eval-styles` both use it.
+    pub fn tldr_takeaways(words: usize) -> Option<std::ops::RangeInclusive<usize>> {
+        match words {
+            0..TLDR_LIST_MIN_WORDS => None,
+            TLDR_LIST_MIN_WORDS..250 => Some(3..=4),
+            _ => Some(3..=6),
+        }
     }
 
     /// Expand may use at most twice the words of the text. Models do not always keep to the
@@ -88,7 +106,7 @@ impl Style {
     /// False for the styles that must change the length or the form of the text, so the rules
     /// "keep every fact" and "keep the kind of text" cannot apply to them.
     fn keeps_content(&self) -> bool {
-        !matches!(self, Style::Summarize | Style::Expand | Style::Bullets)
+        !matches!(self, Style::Summarize | Style::Expand | Style::Bullets | Style::Tldr)
     }
 
     /// Concrete rules, not adjectives: small local models follow "cut about half" and "no
@@ -141,6 +159,14 @@ impl Style {
                  point, in the text's order. No heading, no introduction and no closing sentence. Keep every \
                  fact and request."
             }
+            Style::Tldr => {
+                "Style: TL;DR. Plain text, no Markdown headers or bold. First line: \"TL;DR — \" and the text's \
+                 own title, or only \"TL;DR\" when the text has no title; never make up a title. Then a blank line \
+                 and one new sentence of at most 25 words with the main point; never repeat the text. Then a blank \
+                 line, \"Key takeaways:\" and one line per takeaway: \"- Label: one sentence of at most 15 \
+                 words\", with a label of 1 to 4 words. Last, a blank line and one sentence that starts \"The \
+                 takeaway:\". Use only what the text says: no new facts, names or numbers."
+            }
             Style::Custom(instruction) => instruction,
         }
     }
@@ -159,6 +185,17 @@ impl Style {
                     (words * 9 / 5).max(least)
                 ))
             }
+            Style::Tldr => Some(match Style::tldr_takeaways(words) {
+                None => format!("The text has {words} words: use at most {} words.", (words / 3).max(12)),
+                Some(range) => format!(
+                    "The text has {words} words: write {} to {} takeaways and at most {} words in all. The \
+                     main point is one sentence of at most 25 words in your own words; never copy the text's \
+                     sentences. Start every takeaway line with \"- \", a label of 1 to 4 words and a colon.",
+                    range.start(),
+                    range.end(),
+                    words / 2
+                ),
+            }),
             _ => None,
         }
     }
@@ -197,9 +234,23 @@ impl Style {
                  it is not fixed by Thursday, the release moves to Monday.\n- Add your notes to the changelog \
                  before Wednesday."
             }
+            Style::Tldr => {
+                "TL;DR — The Software Atelier by Armin Ronacher\n\nAs AI makes code cheaper to write, the challenge \
+                 shifts to quality, human understanding and tools that work together.\n\nKey takeaways:\n\
+                 - Craftsmanship over volume: Judgment matters more than code volume.\n\
+                 - Reuse, not reinvention: Existing tools and open standards keep the ecosystem whole.\n\
+                 - Durable execution: Waiting agents should suspend and resume without holding resources.\n\
+                 - Human collaboration: Consensus and trust still move at human speed.\n\nThe takeaway: Use AI \
+                 for reasoning, code for execution, small models for classification, and people for judgment."
+            }
             Style::Custom(_) => return None,
         };
-        Some((if self.keeps_content() { EXAMPLE_INPUT } else { LONG_EXAMPLE_INPUT }, rewrite))
+        let input = match self {
+            Style::Tldr => TLDR_EXAMPLE_INPUT,
+            _ if self.keeps_content() => EXAMPLE_INPUT,
+            _ => LONG_EXAMPLE_INPUT,
+        };
+        Some((input, rewrite))
     }
 }
 
@@ -213,6 +264,27 @@ const EXAMPLE_INPUT: &str =
 const LONG_EXAMPLE_INPUT: &str = "hey team, quick update on the release. the build is green now but the safari login \
      bug is still open, sam is looking at it today. if it isnt fixed by thursday we move the release to monday. also \
      please add your notes to the changelog before wednesday";
+
+/// A short text gets a TL;DR of one sentence. Small models copy the form they are shown, so a
+/// short text never sees the full form's instruction or example.
+const TLDR_SHORT_INSTRUCTION: &str = "Style: TL;DR. Write one plain sentence with only the main point and any \
+     request. No \"TL;DR\" line, no title, no list and no labels. Use only what the text says: no new facts, names \
+     or numbers.";
+const TLDR_SHORT_EXAMPLE: &str = "The Safari bug may move the release to Monday; add changelog notes before Wednesday.";
+
+/// The example input for TL;DR: long enough for the full form, with a title to carry over.
+const TLDR_EXAMPLE_INPUT: &str = "The Software Atelier by Armin Ronacher\n\nAI makes writing software cheaper and \
+     faster, so the hard part is no longer producing code. The hard part is keeping quality high, keeping people able \
+     to understand what they ship, and keeping tools able to work together. More generated code is not the goal; \
+     engineering judgment matters more than volume. Teams should also resist the urge to rebuild everything from \
+     scratch: reusing existing tools and open standards keeps the ecosystem from splitting apart. For agents, durable \
+     execution matters, because an agent that waits for a human should be able to suspend, resume and recover \
+     without holding computing resources the whole time. Letting agents write code that composes tools, with loops, \
+     conditions and concurrency, cuts token use compared with calling one tool per step. Small specialized \
+     classifier models fit repetitive decisions better than large models, because they return structured choices \
+     and scores instead of prose. Finally, AI speeds up implementation, but building consensus and trust between \
+     people still moves at human speed. In short, use AI for reasoning, deterministic code for execution, \
+     specialized models for classification, and people for judgment.";
 
 pub struct Prompt {
     pub system: String,
@@ -254,17 +326,19 @@ pub fn build(style: &Style, text: &str) -> Prompt {
         .filter(|(content_only, _)| style.keeps_content() || !content_only)
         .map(|(_, rule)| format!("- {rule}"))
         .collect();
+    let short_tldr = *style == Style::Tldr && Style::tldr_takeaways(text.split_whitespace().count()).is_none();
     let system = format!(
         "You are a rewriting tool. Rewrite the text between <text> and </text> in the style below.\n\n\
          {}\n\nRules:\n{}",
-        style.instruction(),
+        if short_tldr { TLDR_SHORT_INSTRUCTION } else { style.instruction() },
         rules.join("\n")
     );
     let user = |text: &str| match style.word_target(text.split_whitespace().count()) {
         Some(target) => format!("{}\n{target}", delimited(text)),
         None => delimited(text),
     };
-    let example = style.example().map(|(input, answer)| (user(input), answer.to_string()));
+    let example = if short_tldr { Some((LONG_EXAMPLE_INPUT, TLDR_SHORT_EXAMPLE)) } else { style.example() };
+    let example = example.map(|(input, answer)| (user(input), answer.to_string()));
     Prompt { system, example, user: user(text) }
 }
 
@@ -324,11 +398,12 @@ mod tests {
                 assert!(a.system.contains(rule), "{} lacks {rule}", style.name());
             }
             // A summary, an expansion or a list cannot keep every fact or the kind of text.
-            let changes_content = matches!(style, Style::Summarize | Style::Expand | Style::Bullets);
+            let changes_content = matches!(style, Style::Summarize | Style::Expand | Style::Bullets | Style::Tldr);
             for rule in ["Add nothing new", "Keep the kind of text"] {
                 assert_eq!(a.system.contains(rule), !changes_content, "{} and {rule}", style.name());
             }
             let (input, answer) = a.example.as_ref().expect("presets have an example");
+            // "x" is a short text, so TL;DR shows its one-sentence form on the long example input.
             let expected_input = if changes_content { LONG_EXAMPLE_INPUT } else { EXAMPLE_INPUT };
             assert!(input.starts_with(&delimited(expected_input)), "{}: {input}", style.name());
             for b in &prompts[i + 1..] {
@@ -361,6 +436,26 @@ mod tests {
         assert!(words(&answer) <= (n / 3).max(12), "Summarize example has {} words", words(&answer));
         let single = build_single(&Style::Concise, "the text");
         assert!(single.contains("Example:") && single.ends_with("<text>\nthe text\n</text>"), "{single}");
+    }
+
+    #[test]
+    fn a_tldr_lists_takeaways_only_for_a_long_text_and_its_example_keeps_its_own_limits() {
+        let short = build(&Style::Tldr, &"word ".repeat(TLDR_LIST_MIN_WORDS - 1));
+        assert!(short.system.contains("one plain sentence") && !short.system.contains("Key takeaways"));
+        let (_, short_answer) = short.example.expect("example");
+        assert!(!short_answer.contains("Key takeaways"), "a short text never sees the list");
+        let cap = (LONG_EXAMPLE_INPUT.split_whitespace().count() / 3).max(12);
+        assert!(short_answer.split_whitespace().count() <= cap, "the short example keeps its own word target");
+        let long = build(&Style::Tldr, &"word ".repeat(TLDR_LIST_MIN_WORDS));
+        assert!(long.user.contains("write 3 to 4 takeaways and at most 75 words"), "{}", long.user);
+        assert!(long.example.expect("example").0.contains("Software Atelier"));
+
+        let (input, answer) = Style::Tldr.example().expect("example");
+        let words = input.split_whitespace().count();
+        let takeaways = answer.lines().filter(|line| line.starts_with("- ")).count();
+        let range = Style::tldr_takeaways(words).expect("the example shows the full form");
+        assert!(range.contains(&takeaways), "{takeaways} takeaways for {words} words");
+        assert!(answer.split_whitespace().count() <= words / 2, "the example keeps its own word target");
     }
 
     #[test]

@@ -12,7 +12,7 @@ Users want a right-click entry for selected text, like the Scramble browser exte
 
 ## Decision
 
-- Four `NSServices` items in Info.plist: Fix Spelling and Grammar (`fix`), Improve Writing (`clear`), Summarize (`summarize`) and Bullet Points (`bullets`). `NSUserData` is the style id. The other styles stay in the popup, so the context menu stays short.
+- Five `NSServices` items in Info.plist: Fix Spelling and Grammar (`fix`), Improve Writing (`clear`), Summarize (`summarize`), Bullet Points (`bullets`) and TL;DR (`tldr`, added later for long pages and articles). `NSUserData` is the style id. The other styles stay in the popup, so the context menu stays short.
 - Send-only: `NSSendTypes` is plain text and there is no `NSReturnTypes`. A returning service would replace the selection with no preview, make the asking app wait for the model, and could not be cancelled.
 - The provider (`src/mac/services.rs`) only hands the text to the popup, which opens in that style. Capture then reads no selection and no clipboard. Replace is offered only when Accessibility is on and the focused field still selects the same text, so `apply.rs` runs its usual checks. Otherwise the popup offers Copy only.
 - No `NSKeyEquivalent`: Retone has no default shortcut.

@@ -75,6 +75,7 @@ $(service "Fix Spelling and Grammar" fix)
 $(service "Improve Writing" clear)
 $(service "Summarize" summarize)
 $(service "Bullet Points" bullets)
+$(service "TL;DR" tldr)
   </array>"
 
 app="$out/$name.app"

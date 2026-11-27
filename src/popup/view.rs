@@ -8,7 +8,7 @@ use crate::styles::{PRESETS, Style, TONES};
 use rune::{Cx, El, LiveRegion, ScrollSpec, Span, Tx, col, el, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, ControlSize, Kit, List, ListItem, Spinner};
 
-/// The styles the picker offers, in key order 1–9 then 0: the presets, then Custom when it is set.
+/// The styles the picker offers, in key order 1–9, 0, then -: the presets, then Custom when it is set.
 pub fn styles(config: &Config) -> Vec<Style> {
     let mut all = PRESETS.to_vec();
     if !config.custom_style.trim().is_empty() {
@@ -323,9 +323,9 @@ fn scrolling(k: &Kit, key: &str, value: &str, spans: Vec<Span>, follow: bool) ->
         .child(text(value.to_string()).font(k.ty.ui).color(k.c.text_strong).wrap().selectable(true).spans(spans))
 }
 
-/// The key that picks the style at `index`: 1–9, then 0 for the tenth (Custom).
+/// The key that picks the style at `index`: 1–9, 0 for the tenth, then - for the eleventh (Custom).
 pub fn style_key(index: usize) -> String {
-    ((index + 1) % 10).to_string()
+    if index >= 10 { "-".to_string() } else { ((index + 1) % 10).to_string() }
 }
 
 /// Two rows, tones then actions with Custom, so every style keeps a visible chip and one key.
@@ -389,14 +389,20 @@ mod tests {
         assert!(matches!(press(Style::Summarize, false), State::Idle), "↩ copies and closes");
         assert!(matches!(press(Style::Summarize, true), State::Applying { .. }), "⌘↩ replaces");
         assert!(matches!(press(Style::Expand, false), State::Idle));
+        assert!(matches!(press(Style::Tldr, false), State::Idle), "a TL;DR copies like a summary");
         assert!(matches!(press(Style::Clear, false), State::Applying { .. }));
         assert!(matches!(press(Style::Bullets, false), State::Applying { .. }), "a list is still a rewrite");
 
         let mut p = previewing(Phase::Ready("b".into()), true);
         p.config.custom_style = "Rhyme.".into();
-        let zero = rune::KeyEvent { key: rune::Key::Text("0".into()), mods: rune::Mods::default() };
-        super::super::on_key(&mut p, &zero, &mut Tx::default());
-        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Custom(_), .. }), "0 picks Custom");
+        let key = |p: &mut Popup, text: &str| {
+            let ev = rune::KeyEvent { key: rune::Key::Text(text.into()), mods: rune::Mods::default() };
+            super::super::on_key(p, &ev, &mut Tx::default());
+        };
+        key(&mut p, "0");
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Tldr, .. }), "0 picks TL;DR");
+        key(&mut p, "-");
+        assert!(matches!(&p.flow.state, State::Previewing { style: Style::Custom(_), .. }), "- picks Custom");
     }
 
     #[test]
