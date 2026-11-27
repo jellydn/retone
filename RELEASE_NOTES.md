@@ -1,3 +1,15 @@
+## Retone 0.1.0-beta.16 — 2026-11-27
+
+- **Retry now gives a different version.** Before, ⌘R sent the same request again and often got exactly the same text. Now Retry shows the model its last answer and asks for a different version, for every provider. Local AI also gives the model more freedom and a new seed on a retry. The first rewrite in a style is unchanged.
+- **Errors say how to fix them.** A failed rewrite now shows a hint and the buttons that help, not only Retry: **Other style**, **Switch model**, **Open Settings** (a wrong API key, or a CLI that is missing or not verified) and **Retry**. **Enter** runs the main button.
+- **Answer too long:** when you select a question or a request (for example a link and "tell me more about this video"), a small model can answer it instead of rewriting it, and Retone drops the long answer. The popup now says that Retone rewrites text and does not answer it, follow it or open links, and suggests another style or a recommended model. **Show answer** (Enter or ⌘D) shows the dropped answer for **Copy only**; Replace stays off.
+
+Not tested yet in this release: the new error buttons in a real app (unit tests and rendered scenes cover them), and LFM3 models (not installed on the test Mac).
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.15 — 2026-11-27
 
 - New **TL;DR** style: a short summary of long text that you can scan. You get a `TL;DR` line (with the text's own title, if it has one), the main point in one sentence, 3 to 6 labeled key takeaways and one closing line. For a text of less than about 150 words, you get only the main point in one sentence. TL;DR never adds facts, names or numbers. Like Summarize, **Enter** copies the result and **⌘Enter** replaces the selection.
