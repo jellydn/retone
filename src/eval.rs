@@ -279,9 +279,15 @@ fn answer_failures(style: &Style, original: &str, answer: &str, ratio: f64, chan
     }
     let mut failures = Vec::new();
     // Fix may fairly return a text that has no errors unchanged, but a text that starts with a
-    // lower-case letter always has one.
-    let has_error = original.trim_start().chars().next().is_some_and(char::is_lowercase);
-    if changed == 0.0 && (*style != Style::Fix || has_error) {
+    // lower-case letter always has one. Fix is compared as written: the word distance ignores
+    // case and punctuation, which are what Fix corrects.
+    let unchanged = match style {
+        Style::Fix => {
+            original.trim_start().chars().next().is_some_and(char::is_lowercase) && answer.trim() == original.trim()
+        }
+        _ => changed == 0.0,
+    };
+    if unchanged {
         failures.push(format!("{} returned the text unchanged", style.name()));
     }
     failures.extend(job_failure(style, original, answer, ratio, changed));
@@ -503,6 +509,8 @@ mod tests {
         assert_eq!(check(Style::Fix, original), ["Fix returned the text unchanged"]);
         let clean = "The deploy broke because the config had the wrong port. We should add a check for it.";
         assert!(Report::new(clean, &[(Style::Fix, clean.to_string())]).failures.is_empty());
+        let capitals_only = Report::new("hello world", &[(Style::Fix, "Hello world.".to_string())]).failures;
+        assert!(capitals_only.is_empty(), "{capitals_only:?}");
 
         // Fix and Clear may read alike: only the tones are checked apart.
         let same = "The deploy broke because the config had the wrong port. We should add a check for it.";

@@ -188,7 +188,7 @@
   "settings.recommended.model": "{{name}} · {{size}} GB",
   "settings.recommended.note": "Tested with scripts/model-bench.sh on an Apple M1 Max. Use fills in the ID for this server; click Save on the Provider page to keep it. In LM Studio, download the model by its Hugging Face name, then choose it with List.",
   "settings.recommended.quality": "Best quality: 1.2 s a rewrite, 5.3 GB of memory. Passed 99% of the checks and invented no details.",
-  "settings.recommended.smallest": "Smallest: 0.7 s a rewrite, 3.4 GB of memory. Passed 90% of the checks.",
+  "settings.recommended.smallest": "Smallest download: a 2.0 GB file, 0.7 s a rewrite, 3.4 GB of memory. Passed 90% of the checks.",
   "settings.recommended.title": "Recommended models",
   "settings.recommended.use": "Use",
   "settings.save": "Save",

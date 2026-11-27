@@ -151,11 +151,14 @@ impl Style {
     fn word_target(&self, words: usize) -> Option<String> {
         match self {
             Style::Summarize => Some(format!("The text has {words} words: use at most {} words.", (words / 3).max(12))),
-            Style::Expand => Some(format!(
-                "The text has {words} words: write between {} and {} words. Say each point once.",
-                words * 13 / 10,
-                words * 9 / 5
-            )),
+            Style::Expand => {
+                // Rounded up, so a one-word text gets a range it can meet.
+                let least = (words * 13).div_ceil(10);
+                Some(format!(
+                    "The text has {words} words: write between {least} and {} words. Say each point once.",
+                    (words * 9 / 5).max(least)
+                ))
+            }
             _ => None,
         }
     }
@@ -345,9 +348,15 @@ mod tests {
                 .user
                 .ends_with("</text>\nThe text has 10 words: write between 13 and 18 words. Say each point once.")
         );
+        let one_word = build(&Style::Expand, "Thanks").user;
+        assert!(one_word.ends_with("write between 2 and 2 words. Say each point once."), "{one_word}");
         let (_, answer) = expand.example.expect("example");
         let n = words(LONG_EXAMPLE_INPUT);
-        assert!((n * 13 / 10..=n * 9 / 5).contains(&words(&answer)), "Expand example has {} words", words(&answer));
+        assert!(
+            ((n * 13).div_ceil(10)..=n * 9 / 5).contains(&words(&answer)),
+            "Expand example has {} words",
+            words(&answer)
+        );
         let (_, answer) = build(&Style::Summarize, "x").example.expect("example");
         assert!(words(&answer) <= (n / 3).max(12), "Summarize example has {} words", words(&answer));
         let single = build_single(&Style::Concise, "the text");

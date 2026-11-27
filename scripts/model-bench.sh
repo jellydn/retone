@@ -34,6 +34,9 @@ fi
 cargo build -q
 date=$(date +%Y-%m-%d)
 name=${name:-$date}
+case $name in
+  *[!A-Za-z0-9._-]*) echo "--name: use only letters, digits, '.', '_' and '-'" >&2; exit 1 ;;
+esac
 raw=target/bench/$name
 mkdir -p "$raw" bench/results
 results=bench/results/$name
@@ -80,13 +83,14 @@ done
 # invented a detail in at most 5% of its answers, kept the tones apart on every sample, and took at
 # most $slow_s s per rewrite (median).
 # Speed and size come first: fastest is the qualifying model with the lowest median time; smallest,
-# of the others, uses the least memory; quality, of the others, has the highest pass rate (then
-# fewest invented and dropped numbers) among models at most twice as slow as the fastest.
+# of the others, uses the least memory (a model with no RAM figure, as on Ollama, is skipped);
+# quality, of the others, has the highest pass rate (then fewest invented and dropped numbers)
+# among models at most twice as slow as the fastest.
 jq -s '
   def qualifies: .errors == 0 and .pass_rate >= 0.85 and .invented_rate <= 0.05 and .tone_spread_failures == 0 and .total_s <= '"$slow_s"';
   (map(select(qualifies))) as $ok
   | ($ok | min_by(.total_s)) as $fast
-  | ($ok | map(select(.model != $fast.model)) | min_by(.ram_gb)) as $small
+  | ($ok | map(select(.model != $fast.model and .ram_gb > 0)) | min_by(.ram_gb)) as $small
   | ($ok | map(select(.model != $fast.model and .model != $small.model and .total_s <= 2 * ($fast.total_s // 0)))
         | sort_by(-.pass_rate, .invented_rate, .dropped_rate, .total_s) | first) as $best
   | {date: "'"$date"'",
