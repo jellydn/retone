@@ -9,6 +9,7 @@
 //! Keychain, never in prefs. Retone stores no text (the server may log on its side).
 
 use super::{Cancel, DEADLINE, answer_cap};
+use crate::i18n::Key;
 use crate::styles::{self, Style};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader};
@@ -27,6 +28,44 @@ pub const LLAMA_CPP: &str = "http://127.0.0.1:8080/v1";
 /// Llama.app (llama.app), the menu-bar app from the llama.cpp team: its llama.cpp router lists
 /// every installed model and loads the one a request names.
 pub const LLAMA_APP: &str = "http://127.0.0.1:9931/v1";
+
+/// A model that did well in `scripts/model-bench.sh`. `id` is its Hugging Face GGUF ID, which
+/// Llama.app and llama-server load; `why` is the locale key of why it is recommended.
+pub struct Recommended {
+    pub name: &'static str,
+    pub id: &'static str,
+    pub file_gb: f32,
+    pub why: Key,
+}
+
+/// The top 3 of bench/results/2026-11-27.md: fastest, best balance, best quality.
+pub const RECOMMENDED: [Recommended; 3] = [
+    Recommended {
+        name: "Qwen2.5 3B Instruct",
+        id: "Qwen/Qwen2.5-3B-Instruct-GGUF:Q4_K_M",
+        file_gb: 2.1,
+        why: key!("settings.recommended.fastest"),
+    },
+    Recommended {
+        name: "Llama 3.2 3B Instruct",
+        id: "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M",
+        file_gb: 2.0,
+        why: key!("settings.recommended.balance"),
+    },
+    Recommended {
+        name: "Qwen2.5 7B Instruct",
+        id: "Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
+        file_gb: 4.7,
+        why: key!("settings.recommended.quality"),
+    },
+];
+
+/// The ID the server at `endpoint` knows the model by: Ollama pulls a Hugging Face GGUF as
+/// `hf.co/ID`.
+pub fn recommended_id(model: &Recommended, endpoint: &str) -> String {
+    let ollama = endpoint.trim_end_matches('/').ends_with(":11434/v1");
+    if ollama { format!("hf.co/{}", model.id) } else { model.id.to_string() }
+}
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
 

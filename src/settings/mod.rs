@@ -41,6 +41,7 @@ pub const PAGES: [(Page, Key); 4] = [
 pub enum SubPage {
     Address,
     CustomStyle,
+    Recommended,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -403,6 +404,13 @@ impl SettingsUi {
         self.local_model = TextEdit::new(model);
     }
 
+    /// Fills the Model field with a recommended model's ID for the current server, then goes back
+    /// to the Provider page, where Save keeps it.
+    pub fn use_recommended(&mut self, index: usize) {
+        self.local_model = TextEdit::new(local::recommended_id(&local::RECOMMENDED[index], self.endpoint.text.trim()));
+        self.sub_page = None;
+    }
+
     pub fn set_default_style(&mut self, index: usize) {
         self.config.default_style = index;
         self.save();
@@ -482,6 +490,12 @@ pub const SCENES: &[Scene] = &[
         s.page = Page::Provider;
         s.provider_choice = Some(Kind::Local);
         s.sub_page = Some(SubPage::Address);
+    }),
+    ("provider-recommended", |s| {
+        s.page = Page::Provider;
+        s.provider_choice = Some(Kind::Local);
+        s.endpoint = TextEdit::new(local::LLAMA_APP);
+        s.sub_page = Some(SubPage::Recommended);
     }),
     ("provider-llama-app", |s| {
         s.page = Page::Provider;
