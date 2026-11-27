@@ -1,13 +1,13 @@
 #!/bin/sh
 # Runs `retone --eval-styles` on each model and ranks them for Retone's styles.
 #
-#   sh scripts/model-bench.sh [--endpoint URL] [--runs N] [--models FILE] [MODEL ...]
+#   sh scripts/model-bench.sh [--endpoint URL] [--runs N] [--models FILE] [--name NAME] [MODEL ...]
 #
 # Models come from the arguments, or from FILE (default bench/models.txt: one model ID per
 # line, `#` starts a comment). The server must be able to load each one on request: Llama.app,
-# a llama-server router, Ollama or LM Studio. Answers go to target/bench/DATE/. The table and the
-# JSON go to bench/results/DATE.md and DATE.json and rank every model benched that day, so models
-# can be benched one at a time; delete target/bench/DATE to start over.
+# a llama-server router, Ollama or LM Studio. Answers go to target/bench/NAME/. The table and the
+# JSON go to bench/results/NAME.md and NAME.json and rank every model benched under that name, so
+# models can be benched one at a time; delete target/bench/NAME to start over. NAME: today's date.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -22,7 +22,8 @@ while [ $# -gt 0 ]; do
     --endpoint) endpoint=$2; shift 2 ;;
     --runs) runs=$2; shift 2 ;;
     --models) models_file=$2; shift 2 ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    --name) name=$2; shift 2 ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) break ;;
   esac
 done
@@ -32,9 +33,10 @@ fi
 
 cargo build -q
 date=$(date +%Y-%m-%d)
-raw=target/bench/$date
+name=${name:-$date}
+raw=target/bench/$name
 mkdir -p "$raw" bench/results
-results=bench/results/$date
+results=bench/results/$name
 
 for model in "$@"; do
   slug=$(printf '%s' "$model" | tr -c 'A-Za-z0-9._-' '_')
@@ -95,7 +97,7 @@ jq -s '
 ' $(ls "$raw"/*.json | grep -v '\.runs\.json$') > "$results.json"
 
 {
-  echo "# Model bench, $date"
+  echo "# Model bench, $name"
   echo
   echo "$(sysctl -n machdep.cpu.brand_string), $(($(sysctl -n hw.memsize) / 1073741824)) GB. Every style on every sample of"
   echo "\`retone --eval-styles\`, $(jq -r '[.models[].runs] | unique | join(" or ")' "$results.json") runs per model, through"

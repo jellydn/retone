@@ -24,9 +24,10 @@
    sh scripts/model-bench.sh --endpoint http://127.0.0.1:9940/v1 # llama-server
    sh scripts/model-bench.sh --endpoint http://127.0.0.1:11434/v1 --models my-ollama-models.txt
    sh scripts/model-bench.sh --runs 1 unsloth/gemma-4-E2B-it-GGUF:Q4_K_M  # one model, one run
+   sh scripts/model-bench.sh --name new-prompt                   # results under a name, not the date
    ```
 
-3. Read `bench/results/DATE.md` (the table and the top 3) and `DATE.json` (all numbers, also per style). Each model's answers are in `target/bench/DATE/`; read some of them before you trust a number. The checks cannot see every wrong meaning.
+3. Read `bench/results/NAME.md` (the table and the top 3) and `NAME.json` (all numbers, also per style). NAME is today's date unless you pass `--name`. Each model's answers are in `target/bench/NAME/`; read some of them before you trust a number. The checks cannot see every wrong meaning.
 
 ## Add a model
 
@@ -39,7 +40,7 @@ Add its ID to `bench/models.txt`, one per line, as the server names it: `user/re
 | Pass        | Answers that met every check of their style: Concise at most 70% of the length, Fix close to the text, Summarize at most half, Expand 120% to 200%, Bullets a list. |
 | Invented    | Answers with a number the text does not have, or a detail copied from the prompt's example (Safari, login, yesterday, …).                                           |
 | Dropped     | Answers that lost a number of the text. Summarize is not counted, as a summary may leave out details.                                                               |
-| First token | Median time to the first word of the answer. A model that thinks first is slow here: Retone shows only the answer, not the thinking.                                |
+| First token | Median time to the first word of the answer. Retone asks the server not to think first (`reasoning_effort: "none"`); a model that thinks anyway is slow here.       |
 | Total (p90) | Median time per rewrite, and the time 90% of rewrites finished in. The first request is not counted, because it can load the model.                                 |
 | RAM         | Resident memory of the server process that holds the model, after the run.                                                                                          |
 

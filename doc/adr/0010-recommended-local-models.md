@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-Local models differ a lot in how well they do Retone's styles. A small model can return almost the same text for every style, add facts, or ignore the length targets of Concise and Expand. A model that thinks before it answers can take 5 to 50 seconds per rewrite, because Retone waits for the thinking to end and shows only the answer. Users had no way to know which model to pick, and new models come out every month.
+Local models differ a lot in how well they do Retone's styles. A small model can return almost the same text for every style, add facts, or ignore the length targets of Concise and Expand. A model that thinks before it answers took 5 to 50 seconds per rewrite, because Retone waits for the thinking to end and shows only the answer. Since then, Local AI requests send `reasoning_effort: "none"`, which turns thinking off in llama-server and Ollama. Users had no way to know which model to pick, and new models come out every month.
 
 ## Decision
 
