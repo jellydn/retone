@@ -7,13 +7,16 @@
 //! ```text
 //! retone --eval-styles --model qwen2.5:3b [--endpoint http://127.0.0.1:8080/v1] [--text FILE]
 //! retone --eval-styles --provider pi --model ollama/qwen2.5:3b [--style summarize]
+//! retone --eval-styles --model NAME --runs 3 --json out.json   # used by scripts/model-bench.sh
 //! ```
 
 #![forbid(unsafe_code)]
 
 use crate::provider::{Cancel, Env, Outcome, Provider, local};
 use crate::styles::{PRESETS, Style, TONES};
-use std::collections::BTreeSet;
+use std::cell::Cell;
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 /// Concise must cut at least this much, or it did not do its one job.
 const CONCISE_MAX_RATIO: f64 = 0.7;
@@ -28,6 +31,10 @@ const MIN_PAIR_DISTANCE: f64 = 0.1;
 /// The tones together must spread at least this far: some pairs may fairly read alike (a
 /// Professional and a Technical email), but not the whole set.
 const MIN_MEAN_DISTANCE: f64 = 0.3;
+/// Details of the style examples in `styles.rs`. In an answer to a text without them, the model
+/// copied them from the example: an invented fact.
+const EXAMPLE_DETAILS: [&str; 9] =
+    ["safari", "login", "yesterday", "sam", "thursday", "monday", "wednesday", "changelog", "complaining"];
 
 const SAMPLES: [(&str, &str); 4] = [
     (
@@ -105,27 +112,192 @@ fn run(args: &[String]) -> Result<bool, String> {
         None => SAMPLES.to_vec(),
     };
 
+    let runs: usize = match flag(args, "--runs") {
+        Some(runs) => runs.parse().ok().filter(|&runs| runs > 0).ok_or("--runs takes a number from 1")?,
+        None => 1,
+    };
+    let json_path = flag(args, "--json");
+    let rewrite = |style: &Style, text: &str| -> Timed {
+        let start = rune_core::time::now();
+        let first = Cell::new(None);
+        let on_partial = |_: &str| {
+            if first.get().is_none() {
+                first.set(Some(start.elapsed()));
+            }
+        };
+        let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env, &on_partial);
+        let total = start.elapsed();
+        // A server that does not stream sends the whole answer at once.
+        let first = first.get().unwrap_or(total);
+        Timed { answer: answer.unwrap_or_else(|error| format!("ERROR: {error}")), first, total }
+    };
+    if json_path.is_some() {
+        // The first request can load the model; that time is not the model's speed.
+        rewrite(&Style::Clear, samples[0].1);
+    }
+
     println!("# Style eval: {} · {}\n", provider.kind().name(), provider.model());
     let mut all_passed = true;
-    for (name, text) in samples {
-        let answers: Vec<(Style, String)> = styles
-            .iter()
-            .map(|&style| {
-                let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env, &|_| {});
-                (style.clone(), answer.unwrap_or_else(|error| format!("ERROR: {error}")))
-            })
-            .collect();
-        let report = Report::new(text, &answers);
-        print!("{}", report.markdown(name, text));
-        all_passed &= report.failures.is_empty();
+    let mut bench = Bench::default();
+    for run in 1..=runs {
+        for &(name, text) in &samples {
+            let timed: Vec<(Style, Timed)> =
+                styles.iter().map(|&style| (style.clone(), rewrite(style, text))).collect();
+            let answers: Vec<(Style, String)> =
+                timed.iter().map(|(style, timed)| (style.clone(), timed.answer.clone())).collect();
+            let report = Report::new(text, &answers);
+            let title = if runs > 1 { format!("{name}, run {run}") } else { name.to_string() };
+            print!("{}", report.markdown(&title, text));
+            all_passed &= report.failures.is_empty();
+            bench.add(text, &timed, &report);
+        }
     }
     println!("{}", if all_passed { "PASS" } else { "FAIL" });
+    if let Some(path) = json_path {
+        let summary = bench.summary(provider.model(), runs);
+        std::fs::write(path, format!("{summary:#}\n")).map_err(|e| format!("{path}: {e}"))?;
+    }
     Ok(all_passed)
+}
+
+/// One answer and how long it took: to the first streamed text, and to the end.
+struct Timed {
+    answer: String,
+    first: Duration,
+    total: Duration,
+}
+
+/// Counts for `--json`, the numbers `scripts/model-bench.sh` compares models by. A cell is one
+/// style on one sample in one run.
+#[derive(Default)]
+struct Bench {
+    cells: usize,
+    passed: usize,
+    errors: usize,
+    invented: usize,
+    /// Cells that lost a number the text has; Summarize may fairly drop details, so it is skipped.
+    dropped: usize,
+    kept_checked: usize,
+    tone_spread_failures: usize,
+    styles: BTreeMap<String, StyleCounts>,
+    first: Vec<f64>,
+    total: Vec<f64>,
+}
+
+#[derive(Default)]
+struct StyleCounts {
+    cells: usize,
+    passed: usize,
+    /// Answer length against the text, for answers without an error.
+    ratios: Vec<f64>,
+}
+
+impl Bench {
+    fn add(&mut self, original: &str, timed: &[(Style, Timed)], report: &Report) {
+        self.tone_spread_failures += report.spread_failures;
+        for ((style, timed), (_, answer, ratio, changed)) in timed.iter().zip(&report.rows) {
+            let failures = answer_failures(style, original, answer, *ratio, *changed);
+            let counts = self.styles.entry(style.id().to_string()).or_default();
+            counts.cells += 1;
+            self.cells += 1;
+            // A timeout is a real wait for the user, so failed answers count in the times too.
+            self.first.push(timed.first.as_secs_f64());
+            self.total.push(timed.total.as_secs_f64());
+            if answer.starts_with("ERROR:") {
+                self.errors += 1;
+                continue;
+            }
+            counts.ratios.push(*ratio);
+            if failures.is_empty() {
+                counts.passed += 1;
+                self.passed += 1;
+            }
+            if !new_numbers(original, answer).is_empty() || !example_details(original, answer).is_empty() {
+                self.invented += 1;
+            }
+            if *style != Style::Summarize {
+                self.kept_checked += 1;
+                // A number of the text that the answer does not have.
+                if !new_numbers(answer, original).is_empty() {
+                    self.dropped += 1;
+                }
+            }
+        }
+    }
+
+    fn summary(&self, model: &str, runs: usize) -> serde_json::Value {
+        let share = |part: usize, whole: usize| part as f64 / whole.max(1) as f64;
+        let styles: serde_json::Map<String, serde_json::Value> = self
+            .styles
+            .iter()
+            .map(|(id, counts)| {
+                let pass_rate = share(counts.passed, counts.cells);
+                let value = serde_json::json!({ "pass_rate": pass_rate, "length_ratio": median(&counts.ratios) });
+                (id.clone(), value)
+            })
+            .collect();
+        serde_json::json!({
+            "model": model,
+            "runs": runs,
+            "cells": self.cells,
+            "pass_rate": share(self.passed, self.cells),
+            "errors": self.errors,
+            "invented_rate": share(self.invented, self.cells - self.errors),
+            "dropped_rate": share(self.dropped, self.kept_checked),
+            "tone_spread_failures": self.tone_spread_failures,
+            "first_token_s": median(&self.first),
+            "total_s": median(&self.total),
+            "total_p90_s": percentile(&self.total, 0.9),
+            "styles": styles,
+        })
+    }
+}
+
+fn median(values: &[f64]) -> f64 {
+    percentile(values, 0.5)
+}
+
+/// The nearest-rank percentile; 0 for no values.
+fn percentile(values: &[f64], p: f64) -> f64 {
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let rank = (p * sorted.len() as f64).ceil() as usize;
+    sorted.get(rank.saturating_sub(1)).copied().unwrap_or(0.0)
 }
 
 struct Report<'a> {
     rows: Vec<(&'a Style, &'a str, f64, f64)>,
     failures: Vec<String>,
+    /// How many of `failures` are about the tones reading alike, not about one answer.
+    spread_failures: usize,
+}
+
+/// What is wrong with one answer on its own.
+fn answer_failures(style: &Style, original: &str, answer: &str, ratio: f64, changed: f64) -> Vec<String> {
+    if answer.starts_with("ERROR:") {
+        return vec![format!("{} failed", style.name())];
+    }
+    let mut failures = Vec::new();
+    // Fix may fairly return a text that has no errors unchanged.
+    if changed == 0.0 && *style != Style::Fix {
+        failures.push(format!("{} returned the text unchanged", style.name()));
+    }
+    failures.extend(job_failure(style, original, answer, ratio, changed));
+    let added = new_numbers(original, answer);
+    if !added.is_empty() {
+        failures.push(format!("{} added numbers the text does not have: {}", style.name(), added.join(", ")));
+    }
+    let copied = example_details(original, answer);
+    if !copied.is_empty() {
+        failures.push(format!("{} copied details from the example: {}", style.name(), copied.join(", ")));
+    }
+    failures
+}
+
+/// Words of [`EXAMPLE_DETAILS`] in the answer that the text does not have.
+fn example_details(original: &str, answer: &str) -> Vec<&'static str> {
+    let (original, answer) = (words(original), words(answer));
+    EXAMPLE_DETAILS.into_iter().filter(|word| answer.contains(*word) && !original.contains(*word)).collect()
 }
 
 impl<'a> Report<'a> {
@@ -137,22 +309,11 @@ impl<'a> Report<'a> {
                 (style, answer.as_str(), length_ratio(original, answer), changed)
             })
             .collect();
-        let mut failures = Vec::new();
-        for (style, answer, ratio, changed) in &rows {
-            if answer.starts_with("ERROR:") {
-                failures.push(format!("{} failed", style.name()));
-                continue;
-            }
-            // Fix may fairly return a text that has no errors unchanged.
-            if *changed == 0.0 && **style != Style::Fix {
-                failures.push(format!("{} returned the text unchanged", style.name()));
-            }
-            failures.extend(job_failure(style, original, answer, *ratio, *changed));
-            let added = new_numbers(original, answer);
-            if !added.is_empty() {
-                failures.push(format!("{} added numbers the text does not have: {}", style.name(), added.join(", ")));
-            }
-        }
+        let mut failures: Vec<String> = rows
+            .iter()
+            .flat_map(|(style, answer, ratio, changed)| answer_failures(style, original, answer, *ratio, *changed))
+            .collect();
+        let answer_failure_count = failures.len();
         // Only the tones must read apart: Fix is close to the text by design, and a summary may
         // fairly read like Concise.
         let tones: Vec<_> = rows.iter().filter(|row| PRESETS[..TONES].contains(row.0)).collect();
@@ -171,7 +332,8 @@ impl<'a> Report<'a> {
         if !distances.is_empty() && mean < MIN_MEAN_DISTANCE {
             failures.push(format!("the tones are {mean:.2} apart on average (min {MIN_MEAN_DISTANCE})"));
         }
-        Report { rows, failures }
+        let spread_failures = failures.len() - answer_failure_count;
+        Report { rows, failures, spread_failures }
     }
 
     fn markdown(&self, name: &str, original: &str) -> String {
@@ -237,10 +399,11 @@ fn is_bullet_list(text: &str) -> bool {
 }
 
 /// Digit runs in the answer that the text does not have: a cheap sign of an invented fact.
-/// Thousands commas are dropped first, so "10000" written as "10,000" is the same number.
+/// Thousands commas are dropped first, so "10000" written as "10,000" is the same number, and so
+/// are full hours, so "10am" written as "10:00 AM" is the same time.
 fn new_numbers(original: &str, answer: &str) -> Vec<String> {
     let numbers = |text: &str| -> BTreeSet<String> {
-        let digits: String = text.chars().filter(|&c| c != ',').collect();
+        let digits: String = text.replace(":00", "").chars().filter(|&c| c != ',').collect();
         digits.split(|c: char| !c.is_ascii_digit()).filter(|run| !run.is_empty()).map(str::to_string).collect()
     };
     numbers(answer).difference(&numbers(original)).cloned().collect()
@@ -250,16 +413,18 @@ fn length_ratio(original: &str, answer: &str) -> f64 {
     answer.chars().count() as f64 / original.chars().count().max(1) as f64
 }
 
+/// The distinct words of a text, in lower case, without punctuation.
+fn words(text: &str) -> BTreeSet<String> {
+    text.split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
 /// 1 minus the share of distinct words two texts have in common (Jaccard distance): 0 for the
 /// same words, 1 for none in common. Case and punctuation are ignored, so a style that only
 /// fixes capitals scores near 0.
 fn word_distance(a: &str, b: &str) -> f64 {
-    let words = |text: &str| -> BTreeSet<String> {
-        text.split(|c: char| !c.is_alphanumeric() && c != '\'')
-            .filter(|word| !word.is_empty())
-            .map(str::to_lowercase)
-            .collect()
-    };
     let (a, b) = (words(a), words(b));
     let union = a.union(&b).count();
     if union == 0 {
@@ -322,9 +487,15 @@ mod tests {
 
         let invented = check(Style::Clear, "The deploy broke because port 8080 was wrong in the config. Add a check.");
         assert_eq!(invented, ["Clear added numbers the text does not have: 8080"]);
+        let copied = check(Style::Clear, "The deploy broke on the login page since yesterday. Add a check.");
+        assert_eq!(copied, ["Clear copied details from the example: login, yesterday"]);
+        let monday = "the deploy broke on monday because the config had the wrong port";
+        assert!(example_details(monday, "On Monday, the deploy broke: wrong port.").is_empty(), "in the text");
         let rows = "more than 10000 rows broke the deploy";
         assert!(new_numbers(rows, "More than 10,000 rows broke the deploy.").is_empty());
         assert_eq!(new_numbers(rows, "More than 10, 000 rows broke the deploy."), ["000", "10"], "a split number");
+        assert!(new_numbers("the sync at 10am", "The sync at 10:00 AM.").is_empty());
+        assert_eq!(new_numbers("the sync at 10am", "The sync at 10:30 AM."), ["30"]);
         // The eval cannot tell a clean text from a missed error, so an unchanged Fix passes.
         assert!(check(Style::Fix, original).is_empty());
 

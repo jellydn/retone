@@ -25,6 +25,7 @@ pub fn view(s: &SettingsUi, cx: &mut Cx<SettingsUi>) -> El {
     let body = match (s.page, s.sub_page) {
         (_, Some(SubPage::Address)) => address_page(s, &k),
         (_, Some(SubPage::CustomStyle)) => custom_style_page(s, &k),
+        (_, Some(SubPage::Recommended)) => recommended_page(s, &k),
         (Page::General, None) => general_page(s, &k, &mut layer),
         (Page::Provider, None) => provider_page(s, &k, &mut layer),
         (Page::Styles, None) => styles_page(s, &k, &mut layer),
@@ -511,6 +512,16 @@ fn local_rows(s: &SettingsUi, k: &Kit) -> Vec<El> {
             help(k, t!("settings.provider.model_help")),
             model_control,
         ),
+        setting(
+            k,
+            "recommended",
+            &LAYERS,
+            t!("settings.recommended.title"),
+            help(k, t!("settings.recommended.help")),
+            value_link(k, "recommended-link", t!("settings.recommended.link"), |s: &mut SettingsUi| {
+                s.sub_page = Some(SubPage::Recommended);
+            }),
+        ),
     ];
     match &s.listed_models {
         Some(Ok(models)) if models.is_empty() => rows.push(setting(
@@ -621,6 +632,29 @@ fn address_page(s: &SettingsUi, k: &Kit) -> El {
             ],
         ))
         .child(text(t!("settings.address.save_note")).font(k.ty.text_small).color(k.c.text_muted))
+}
+
+fn recommended_page(s: &SettingsUi, k: &Kit) -> El {
+    let endpoint = s.endpoint.text.trim();
+    let rows = local::RECOMMENDED
+        .iter()
+        .enumerate()
+        .map(|(index, model)| {
+            let title = t!("settings.recommended.model", name = model.name, size = format!("{:.1}", model.file_gb));
+            let body = format!("{}\n{}", I18N.text(model.why), local::recommended_id(model, endpoint));
+            let use_it = Button::new(t!("settings.recommended.use"))
+                .variant(ButtonVariant::Outline)
+                .on_press(move |s: &mut SettingsUi| s.use_recommended(index))
+                .build(k);
+            setting(k, &format!("recommended-{index}"), &MODEL, &title, help(k, body), use_it)
+        })
+        .collect();
+    col()
+        .w_full()
+        .gap(16.0)
+        .child(sub_page_header(k, t!("settings.page.provider"), t!("settings.recommended.title")))
+        .child(card(k, "recommended-card", rows))
+        .child(text(t!("settings.recommended.note")).font(k.ty.text_small).color(k.c.text_muted).wrap())
 }
 
 fn styles_page(s: &SettingsUi, k: &Kit, layer: &mut Vec<El>) -> El {
