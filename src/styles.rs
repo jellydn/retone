@@ -131,9 +131,9 @@ impl Style {
                  needs it."
             }
             Style::Expand => {
-                "Style: Expand. Write about one and a half times as many words as the text, never more than \
-                 twice as many. Turn each short point into a full sentence, add transitions such as \"however\" \
-                 and \"so\", and say plainly what the text only implies. Never add a fact, number, name, cause or \
+                "Style: Expand. Make the text longer. Keep every point of the text, written as a full sentence, \
+                 and after each point add one sentence that explains it or says what it means for the reader. \
+                 Add transitions such as \"however\" and \"so\". Never add a fact, number, name, cause or \
                  promise that the text does not have."
             }
             Style::Bullets => {
@@ -146,14 +146,15 @@ impl Style {
     }
 
     /// A word count for the styles whose job is a length: small models follow "about 60 words" but
-    /// not "one and a half times as many".
+    /// not "one and a half times as many". It goes right after the text, with the example's own
+    /// count after the example, or models copy the example's length instead.
     fn word_target(&self, words: usize) -> Option<String> {
         match self {
             Style::Summarize => Some(format!("The text has {words} words: use at most {} words.", (words / 3).max(12))),
             Style::Expand => Some(format!(
-                "The text has {words} words: use about {} words and never more than {}. Say each point once.",
-                words * 3 / 2,
-                words * 2
+                "The text has {words} words: write between {} and {} words. Say each point once.",
+                words * 13 / 10,
+                words * 9 / 5
             )),
             _ => None,
         }
@@ -180,15 +181,13 @@ impl Style {
                  about it since yesterday."
             }
             Style::Summarize => {
-                "The Safari login bug is still open, so the release may move to Monday. Add your changelog notes \
-                 before Wednesday."
+                "The release may slip to Monday over the Safari login bug. Add changelog notes by Wednesday."
             }
             Style::Expand => {
-                "Hi team, here is a quick update on where the release stands. The good news is that the build is \
-                 green now. However, the Safari login bug is still open, and Sam is looking into it today. If the \
-                 bug is not fixed by Thursday, we will not ship this week; instead, we will move the release to \
-                 Monday. In the meantime, please remember to add your notes to the changelog before Wednesday, so \
-                 that it is complete in time for the release."
+                "Hi team, here is a quick update on the release. The good news is that the build is green now. \
+                 However, the Safari login bug is still open, and Sam is looking into it today. If the bug is not \
+                 fixed by Thursday, we will not ship this week; instead, we will move the release to Monday. In the \
+                 meantime, please add your notes to the changelog before Wednesday, so that it is complete in time."
             }
             Style::Bullets => {
                 "- The build is green.\n- The Safari login bug is still open; Sam is looking at it today.\n- If \
@@ -252,17 +251,18 @@ pub fn build(style: &Style, text: &str) -> Prompt {
         .filter(|(content_only, _)| style.keeps_content() || !content_only)
         .map(|(_, rule)| format!("- {rule}"))
         .collect();
-    let mut instruction = style.instruction().to_string();
-    if let Some(target) = style.word_target(text.split_whitespace().count()) {
-        instruction = format!("{instruction} {target}");
-    }
     let system = format!(
         "You are a rewriting tool. Rewrite the text between <text> and </text> in the style below.\n\n\
-         {instruction}\n\nRules:\n{}",
+         {}\n\nRules:\n{}",
+        style.instruction(),
         rules.join("\n")
     );
-    let example = style.example().map(|(input, answer)| (delimited(input), answer.to_string()));
-    Prompt { system, example, user: delimited(text) }
+    let user = |text: &str| match style.word_target(text.split_whitespace().count()) {
+        Some(target) => format!("{}\n{target}", delimited(text)),
+        None => delimited(text),
+    };
+    let example = style.example().map(|(input, answer)| (user(input), answer.to_string()));
+    Prompt { system, example, user: user(text) }
 }
 
 /// The prompt as one message, for CLIs that take a single stdin prompt.
@@ -327,7 +327,7 @@ mod tests {
             }
             let (input, answer) = a.example.as_ref().expect("presets have an example");
             let expected_input = if changes_content { LONG_EXAMPLE_INPUT } else { EXAMPLE_INPUT };
-            assert_eq!(input, &delimited(expected_input));
+            assert!(input.starts_with(&delimited(expected_input)), "{}: {input}", style.name());
             for b in &prompts[i + 1..] {
                 assert_ne!(a.system, b.system);
                 assert_ne!(answer, &b.example.as_ref().expect("example").1);
@@ -335,6 +335,21 @@ mod tests {
         }
         let custom = build(&Style::Custom("Make it rhyme.".into()), "x");
         assert!(custom.example.is_none(), "no example could show a custom style");
+
+        // Models copy the example's length, so a length example must meet its own word target,
+        // and the target follows the text it counts.
+        let words = |text: &str| text.split_whitespace().count();
+        let expand = build(&Style::Expand, "one two three four five six seven eight nine ten");
+        assert!(
+            expand
+                .user
+                .ends_with("</text>\nThe text has 10 words: write between 13 and 18 words. Say each point once.")
+        );
+        let (_, answer) = expand.example.expect("example");
+        let n = words(LONG_EXAMPLE_INPUT);
+        assert!((n * 13 / 10..=n * 9 / 5).contains(&words(&answer)), "Expand example has {} words", words(&answer));
+        let (_, answer) = build(&Style::Summarize, "x").example.expect("example");
+        assert!(words(&answer) <= (n / 3).max(12), "Summarize example has {} words", words(&answer));
         let single = build_single(&Style::Concise, "the text");
         assert!(single.contains("Example:") && single.ends_with("<text>\nthe text\n</text>"), "{single}");
     }
