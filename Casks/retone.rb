@@ -1,6 +1,6 @@
 cask "retone" do
-  version "0.1.0-beta.16"
-  sha256 "5571fc4d9f6e1508f082f02538b0001a5adfd0cb606845d856a72df3725f8430"
+  version "0.1.0-beta.17"
+  sha256 "f84041b6b72374dc061af2a4d12c42c03d467b1c099fbc829ed3354607da6fd6"
 
   url "https://github.com/jellydn/retone/releases/download/v#{version}/Retone-#{version}.dmg"
   name "Retone"
