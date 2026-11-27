@@ -1,3 +1,16 @@
+## Retone 0.1.0-beta.15 — 2026-11-27
+
+- New **TL;DR** style: a short summary of long text that you can scan. You get a `TL;DR` line (with the text's own title, if it has one), the main point in one sentence, 3 to 6 labeled key takeaways and one closing line. For a text of less than about 150 words, you get only the main point in one sentence. TL;DR never adds facts, names or numbers. Like Summarize, **Enter** copies the result and **⌘Enter** replaces the selection.
+- Cleaner style picker: the popup now shows one row, **1 Clear · 2 Fix · 3 Summarize · 4 Bullets · 5 TL;DR · 6 More**. **More** lists the other styles (Concise, Professional, Technical, Simplify, Expand and your own). Choose with ↑↓ and Enter, or with a number. When the current style is in More, the 6th chip shows its name. Your default style and style shortcuts do not change.
+- Right-click menu: a 5th item, **Retone: TL;DR**. The README now explains how to use the right-click menu and how to turn its items on.
+- For developers: `retone --eval-styles` checks the TL;DR form and has a 5th, longer sample (`report`). Pass rates in `scripts/model-bench.sh` are not directly comparable with earlier results.
+
+Not tested yet in this release: the TL;DR right-click item and the More list in a real app (unit tests and rendered scenes cover them).
+
+Still ad-hoc signed without automatic updates: grant Accessibility again after updating (System Settings → Privacy & Security → Accessibility: remove Retone, then add it again).
+
+Update: `brew update && brew upgrade --cask retone`, or download the DMG below.
+
 ## Retone 0.1.0-beta.14 — 2026-11-27
 
 - New **Settings → Provider → Recommended models**: three small local models that passed Retone's style checks on an Apple M1 Max. Fastest: Qwen2.5 3B (0.6 s a rewrite). Smallest download: Llama 3.2 3B (2.0 GB). Best quality: Qwen2.5 7B (99% of the checks). **Use** fills in the model ID for your server (Ollama, Llama.app, llama.cpp or LM Studio); click **Save** to keep it.
