@@ -10,8 +10,7 @@
 //! user's `auth.json` for the login. The user's Codex home is never written.
 
 use super::cli::{self, Run, WorkDir};
-use super::{Cancel, Outcome};
-use crate::styles::{self, Style};
+use super::{Cancel, ErrorKind, Failure, Outcome};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -33,20 +32,21 @@ const DISABLED_FEATURES: [&str; 11] = [
 ];
 
 /// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+/// `prompt` goes on stdin; `text` is the selection, for the answer cap and redaction.
 pub fn rewrite(
     verified: &[&str],
     program: &Path,
     model: &str,
-    style: &Style,
+    prompt: String,
     text: &str,
     cancel: &Cancel,
     home: &Path,
 ) -> Outcome {
-    let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
+    let fail = |error: Failure| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("Codex", model) {
-        return fail(error);
+        return fail(Failure::new(ErrorKind::Setup, error));
     }
-    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(Failure::new(ErrorKind::Other, t!("provider.temp_folder"))) };
     // The user's Codex home: the same rule as the release gate's ${CODEX_HOME:-$HOME/.codex}.
     let user_home = rune_core::env::var("CODEX_HOME")
         .filter(|dir| !dir.is_empty())
@@ -54,7 +54,7 @@ pub fn rewrite(
         .unwrap_or_else(|| home.join(".codex"));
     let private = workdir.path().join("codex");
     if std::fs::create_dir(&private).is_err() {
-        return fail(t!("provider.temp_folder").into());
+        return fail(Failure::new(ErrorKind::Other, t!("provider.temp_folder")));
     }
     let auth = user_home.join("auth.json");
     if auth.is_file() {
@@ -92,7 +92,7 @@ pub fn rewrite(
             .into_iter()
             .chain(session_folders(&user_home.join("sessions")))
             .collect(),
-        stdin: styles::build_single(style, text),
+        stdin: prompt,
     };
     cli::execute(run, &workdir, text, cancel, home)
 }

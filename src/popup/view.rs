@@ -3,7 +3,7 @@
 use super::Popup;
 use crate::config::Config;
 use crate::flow::{Event, Notice, Phase, State};
-use crate::provider::consent;
+use crate::provider::{ErrorKind, Failure, Kind, consent};
 use crate::styles::{MAIN, PRESETS, Style};
 use rune::{Cx, El, LiveRegion, ScrollSpec, Span, Tx, col, el, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, ControlSize, Kit, List, ListItem, Spinner};
@@ -36,9 +36,11 @@ pub fn spoken(p: &Popup) -> Option<(String, LiveRegion)> {
         State::Previewing { phase: Phase::Loading | Phase::Streaming(_), .. } => {
             Some((t!("popup.spoken.rewriting").into(), Polite))
         }
-        State::Previewing { phase: Phase::Failed(error), .. } => {
+        State::Previewing { phase: Phase::Failed(failure), .. } => {
+            let error = format!("{} {}", failure.message, hint(p, failure));
             Some((t!("popup.spoken.failed", error = error), Assertive))
         }
+        State::Previewing { phase: Phase::Dropped(_), .. } => Some((t!("popup.spoken.dropped").into(), Polite)),
         State::Previewing { phase: Phase::Ready(_), can_replace, .. } => {
             let words = if *can_replace { t!("popup.spoken.ready_replace") } else { t!("popup.spoken.ready_copy") };
             Some((words.into(), Polite))
@@ -280,7 +282,10 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
             (scrolling(k, "rewrite", so_far, Vec::new(), true).label(t!("popup.rewrite_so_far")), false)
         }
         Phase::Ready(rewrite) => (scrolling(k, "rewrite", rewrite, added, false).label(t!("popup.rewrite")), true),
-        Phase::Failed(error) => (message(k, "error", t!("popup.rewrite_failed"), error, k.c.danger.fg), false),
+        Phase::Failed(failure) => (failed(p, k, failure), false),
+        Phase::Dropped(answer) => {
+            (scrolling(k, "rewrite", answer, Vec::new(), false).label(t!("popup.dropped_answer")), false)
+        }
     };
     let mut notes = Vec::new();
     if let Some(error) = &p.flow.apply_error {
@@ -304,24 +309,20 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
     if matches!(phase, Phase::Streaming(_)) {
         notes.push(t!("popup.note.streaming").to_string());
     }
+    if matches!(phase, Phase::Dropped(_)) {
+        notes.push(t!("popup.note.dropped").to_string());
+    }
     if let Some(warning) = &p.adapter_warning {
         notes.push(warning.clone());
     }
-    let mut actions = vec![action(t!("popup.retry"), "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
-    let replace = ready && can_replace && p.flow.apply_error.is_none();
-    // ↩ goes to the main button, the last one: Copy for a summary or an expansion, else Replace.
-    let copy_first = style.changes_meaning();
-    if replace && copy_first {
-        actions.push(action(t!("popup.replace"), "⌘↩", ButtonVariant::Neutral, || Event::Replace, k));
-    }
-    if ready {
-        let (shortcut, variant) =
-            if copy_first { ("↩", ButtonVariant::Contrast) } else { ("⌘C", ButtonVariant::Neutral) };
-        actions.push(action(t!("popup.copy"), shortcut, variant, || Event::Copy, k));
-    }
-    if replace && !copy_first {
-        actions.push(action(t!("popup.replace"), "↩", ButtonVariant::Contrast, || Event::Replace, k));
-    }
+    let actions = match phase {
+        Phase::Failed(failure) => failure_actions(k, failure.kind),
+        Phase::Dropped(_) => vec![
+            action(t!("popup.retry"), "⌘R", ButtonVariant::Ghost, || Event::Retry, k),
+            action(t!("popup.copy"), "↩", ButtonVariant::Contrast, || Event::Copy, k),
+        ],
+        _ => answer_actions(p, k, style, ready, can_replace),
+    };
     let mut body = col()
         .w_full()
         .grow(1.0)
@@ -343,6 +344,101 @@ fn preview_body(p: &Popup, k: &Kit, original: &str, style: &Style, phase: &Phase
         body = body.child(text(note).font(k.ty.text_xsmall).color(k.c.warning.fg).wrap());
     }
     body.child(buttons(actions))
+}
+
+fn answer_actions(p: &Popup, k: &Kit, style: &Style, ready: bool, can_replace: bool) -> Vec<El> {
+    let mut actions = vec![action(t!("popup.retry"), "⌘R", ButtonVariant::Ghost, || Event::Retry, k)];
+    let replace = ready && can_replace && p.flow.apply_error.is_none();
+    // ↩ goes to the main button, the last one: Copy for a summary or an expansion, else Replace.
+    let copy_first = style.changes_meaning();
+    if replace && copy_first {
+        actions.push(action(t!("popup.replace"), "⌘↩", ButtonVariant::Neutral, || Event::Replace, k));
+    }
+    if ready {
+        let (shortcut, variant) =
+            if copy_first { ("↩", ButtonVariant::Contrast) } else { ("⌘C", ButtonVariant::Neutral) };
+        actions.push(action(t!("popup.copy"), shortcut, variant, || Event::Copy, k));
+    }
+    if replace && !copy_first {
+        actions.push(action(t!("popup.replace"), "↩", ButtonVariant::Contrast, || Event::Replace, k));
+    }
+    actions
+}
+
+/// The error, then how to fix it. It scrolls, so a long CLI error never hides the actions.
+fn failed(p: &Popup, k: &Kit, failure: &Failure) -> El {
+    col()
+        .key("failure")
+        .w_full()
+        .grow(1.0)
+        .min_h(0.0)
+        .scroll(ScrollSpec { stick_bottom: false })
+        .gap(6.0)
+        .child(message(k, "error", t!("popup.rewrite_failed"), &failure.message, k.c.danger.fg))
+        .child(text(hint(p, failure)).font(k.ty.text_small).color(k.c.text_muted).wrap())
+}
+
+/// What the user can do about this kind of failure.
+fn hint(p: &Popup, failure: &Failure) -> String {
+    match failure.kind {
+        // Local AI only: the CLI providers run large models that keep to the task.
+        ErrorKind::TooLong if p.provider.as_ref().is_some_and(|provider| provider.kind() == Kind::Local) => {
+            t!("popup.hint.too_long_local", model = crate::provider::local::RECOMMENDED[0].name)
+        }
+        ErrorKind::TooLong => t!("popup.hint.too_long").into(),
+        ErrorKind::Empty => t!("popup.hint.empty").into(),
+        ErrorKind::Timeout => t!("popup.hint.timeout").into(),
+        ErrorKind::Unreachable => t!("popup.hint.unreachable").into(),
+        ErrorKind::Setup => t!("popup.hint.setup").into(),
+        ErrorKind::Other => t!("popup.hint.other").into(),
+    }
+}
+
+/// The actions that can fix this kind of failure; the last one is the main one. Retry stays on
+/// every kind, as a retry samples a new answer.
+fn failure_actions(k: &Kit, kind: ErrorKind) -> Vec<El> {
+    // The main action, the last one, is also on ↩.
+    let retry = |variant| {
+        let shortcut = if variant == ButtonVariant::Contrast { "↩" } else { "⌘R" };
+        action(t!("popup.retry"), shortcut, variant, || Event::Retry, k)
+    };
+    let switch_model = || {
+        Button::new(t!("popup.switch_model"))
+            .variant(ButtonVariant::Ghost)
+            .shortcut("⌘P")
+            .on_press(|p: &mut Popup| p.toggle_picker())
+            .build(k)
+    };
+    let other_style = || {
+        Button::new(t!("popup.other_style"))
+            .variant(ButtonVariant::Ghost)
+            .shortcut("6")
+            .on_press(|p: &mut Popup| p.toggle_more())
+            .build(k)
+    };
+    let open_settings = |variant| {
+        let shortcut = if variant == ButtonVariant::Contrast { "↩" } else { "" };
+        Button::new(t!("popup.open_settings"))
+            .variant(variant)
+            .shortcut(shortcut)
+            .on_press_tx(|p: &mut Popup, tx: &mut Tx| p.open_settings(tx))
+            .build(k)
+    };
+    match kind {
+        ErrorKind::TooLong => vec![
+            other_style(),
+            switch_model(),
+            retry(ButtonVariant::Ghost),
+            action(t!("popup.show_dropped"), "↩", ButtonVariant::Contrast, || Event::ShowDropped, k),
+        ],
+        ErrorKind::Unreachable => {
+            vec![open_settings(ButtonVariant::Ghost), switch_model(), retry(ButtonVariant::Contrast)]
+        }
+        ErrorKind::Setup => vec![switch_model(), retry(ButtonVariant::Ghost), open_settings(ButtonVariant::Contrast)],
+        ErrorKind::Empty | ErrorKind::Timeout | ErrorKind::Other => {
+            vec![other_style(), switch_model(), retry(ButtonVariant::Contrast)]
+        }
+    }
 }
 
 /// `follow` keeps the end in view while a streamed answer grows.
@@ -457,9 +553,26 @@ mod tests {
     }
 
     #[test]
+    fn return_runs_the_main_action_of_a_failure() {
+        let enter = |failure: crate::provider::Failure| {
+            let mut p = previewing(Phase::Failed(failure), true);
+            let ev = rune::KeyEvent { key: rune::Key::Enter, mods: rune::Mods::default() };
+            super::super::on_key(&mut p, &ev, &mut Tx::default());
+            p.flow.state
+        };
+        let retried = enter(Failure::new(ErrorKind::Timeout, "slow"));
+        assert!(matches!(retried, State::Previewing { phase: Phase::Loading, .. }), "↩ retries");
+        let shown = enter(Failure::too_long("- An answer.".into()));
+        assert!(matches!(shown, State::Previewing { phase: Phase::Dropped(_), .. }), "↩ shows the dropped answer");
+        assert_eq!(enter(Failure::new(ErrorKind::Setup, "key")), State::Idle, "↩ opens Settings and closes");
+    }
+
+    #[test]
     fn errors_interrupt_and_progress_waits() {
-        let (words, how) = spoken(&previewing(Phase::Failed("No answer within 60 s.".into()), true)).expect("spoken");
-        assert_eq!((words.as_str(), how), ("Rewrite failed. No answer within 60 s.", LiveRegion::Assertive));
+        let timeout = Failure::new(ErrorKind::Timeout, "No answer within 60 s.");
+        let (words, how) = spoken(&previewing(Phase::Failed(timeout), true)).expect("spoken");
+        assert!(words.starts_with("Rewrite failed. No answer within 60 s. A large model"), "{words}");
+        assert_eq!(how, LiveRegion::Assertive);
         assert_eq!(spoken(&previewing(Phase::Loading, true)), Some(("Rewriting.".into(), LiveRegion::Polite)));
         // Streaming says the same words, so a screen reader does not hear every new token.
         assert_eq!(

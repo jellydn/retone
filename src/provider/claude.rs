@@ -7,8 +7,7 @@
 //! are not loaded, and the temp folder has none.
 
 use super::cli::{self, Run, WorkDir};
-use super::{Cancel, Outcome};
-use crate::styles::{self, Style};
+use super::{Cancel, ErrorKind, Failure, Outcome};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -16,24 +15,25 @@ use std::path::{Path, PathBuf};
 pub const VERIFIED: &[&str] = &["2.1.66"];
 
 /// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+/// `prompt` goes on stdin; `text` is the selection, for the answer cap and redaction.
 pub fn rewrite(
     verified: &[&str],
     program: &Path,
     model: &str,
-    style: &Style,
+    prompt: String,
     text: &str,
     cancel: &Cancel,
     home: &Path,
 ) -> Outcome {
-    let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
+    let fail = |error: Failure| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("Claude Code", model) {
-        return fail(error);
+        return fail(Failure::new(ErrorKind::Setup, error));
     }
     let config = match config_dir(rune_core::env::var("CLAUDE_CONFIG_DIR"), home) {
         Ok(config) => config,
-        Err(error) => return fail(error),
+        Err(error) => return fail(Failure::new(ErrorKind::Setup, error)),
     };
-    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(Failure::new(ErrorKind::Other, t!("provider.temp_folder"))) };
     let args = [
         "-p",
         "--no-session-persistence",
@@ -59,7 +59,7 @@ pub fn rewrite(
         // Sessions go to projects/<folder>/; a new folder there changes its time. The release
         // gate checks all of the config folder and ~/.claude.json.
         data_dirs: vec![config.join("projects")],
-        stdin: styles::build_single(style, text),
+        stdin: prompt,
     };
     cli::execute(run, &workdir, text, cancel, home)
 }

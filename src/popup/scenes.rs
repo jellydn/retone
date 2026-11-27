@@ -4,12 +4,13 @@
 use super::Popup;
 use crate::flow::{Notice, Phase, State};
 use crate::input::Refusal;
-use crate::provider::Provider;
+use crate::provider::{ErrorKind, Failure, Provider};
 use crate::styles::Style;
 use crate::theme::Theme;
 use rune::machine::Attempt;
 
 const ORIGINAL: &str = "hi team, the meeting are moved to tuesday because of some reasons, pls update ur calendars";
+const REQUEST: &str = "https://youtu.be/UA3qEfR11zM Tell me more about formal verification from this video";
 const REWRITE: &str = "Hi team, the meeting has moved to Tuesday. Please update your calendars.";
 
 fn with_provider(p: &mut Popup) {
@@ -25,6 +26,10 @@ fn previewing(p: &mut Popup, phase: Phase, can_replace: bool) {
     with_provider(p);
     p.flow.state =
         State::Previewing { attempt: Attempt(1), original: ORIGINAL.into(), style: Style::Clear, phase, can_replace };
+}
+
+fn failed(p: &mut Popup, failure: Failure) {
+    previewing(p, Phase::Failed(failure), true);
 }
 
 /// A named state for `--scene`, as Rune's `AppSpec::scenes` takes it.
@@ -88,7 +93,37 @@ pub const SCENES: &[Scene] = &[
     }),
     ("loading-example", |p| previewing(p, Phase::Loading, true)),
     ("streaming-example", |p| previewing(p, Phase::Streaming("Hi team, the meeting has moved to Tue".into()), true)),
-    ("error-example", |p| previewing(p, Phase::Failed("No answer within 60 s.".into()), true)),
+    ("error-example", |p| failed(p, Failure::new(ErrorKind::Timeout, "No answer within 60 s."))),
+    // The screenshot case: a request with a link, answered instead of rewritten.
+    ("error-too-long-example", |p| {
+        let answer = "- Formal verification proves that a program meets its specification.\n- It uses \
+                      mathematical logic instead of tests...";
+        failed(p, Failure::too_long(answer.into()));
+        if let State::Previewing { original, style, .. } = &mut p.flow.state {
+            *original = REQUEST.into();
+            *style = Style::Bullets;
+        }
+    }),
+    ("dropped-example", |p| {
+        let answer = "- Formal verification proves that a program meets its specification.\n- It uses \
+                      mathematical logic instead of tests, so it covers every input.";
+        previewing(p, Phase::Dropped(answer.into()), false);
+        if let State::Previewing { original, style, .. } = &mut p.flow.state {
+            *original = REQUEST.into();
+            *style = Style::Bullets;
+        }
+    }),
+    ("error-unreachable-example", |p| {
+        let message = "Cannot reach the local server. Is Ollama, LM Studio, llama-server or Llama.app running?";
+        failed(p, Failure::new(ErrorKind::Unreachable, message));
+    }),
+    ("error-setup-example", |p| {
+        let message = "Pi 1.7.0 is not verified for no-history use. Retone supports Pi 1.5.2, 1.6.0, 1.6.1. \
+                       Choose another provider or keep a verified version.";
+        failed(p, Failure::new(ErrorKind::Setup, message));
+        p.provider = Some(Provider::Pi { model: "anthropic/claude-haiku-5-5".into() });
+    }),
+    ("error-empty-example", |p| failed(p, Failure::new(ErrorKind::Empty, "The model returned no text."))),
     ("too-long-example", |p| {
         with_provider(p);
         p.flow.state = State::Notice(Notice::Refused(Refusal::TooLong { chars: 2431 }));

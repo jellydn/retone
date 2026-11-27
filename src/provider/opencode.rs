@@ -6,8 +6,7 @@
 //! does not stop it. With `XDG_DATA_HOME` in Retone's temp folder, 5 of 5 runs changed no files.
 
 use super::cli::{self, Run, WorkDir};
-use super::{Cancel, Outcome};
-use crate::styles::{self, Style};
+use super::{Cancel, ErrorKind, Failure, Outcome};
 use std::ffi::OsString;
 use std::path::Path;
 
@@ -37,24 +36,25 @@ pub fn is_free_model(model: &str) -> bool {
 }
 
 /// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+/// `prompt` goes on stdin; `text` is the selection, for the answer cap and redaction.
 pub fn rewrite(
     verified: &[&str],
     program: &Path,
     model: &str,
-    style: &Style,
+    prompt: String,
     text: &str,
     cancel: &Cancel,
     home: &Path,
 ) -> Outcome {
-    let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
+    let fail = |error: Failure| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("OpenCode", model) {
-        return fail(error);
+        return fail(Failure::new(ErrorKind::Setup, error));
     }
-    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(Failure::new(ErrorKind::Other, t!("provider.temp_folder"))) };
     let config = workdir.path().join("opencode.json");
     let data = workdir.path().join("data");
     if std::fs::write(&config, CONFIG).is_err() || std::fs::create_dir_all(data.join("opencode")).is_err() {
-        return fail(t!("opencode.config_failed").into());
+        return fail(Failure::new(ErrorKind::Other, t!("opencode.config_failed")));
     }
     // Moving the data folder also hides OpenCode's login file; a copy in the temp folder keeps
     // connected providers working and is deleted with the folder.
@@ -78,7 +78,6 @@ pub fn rewrite(
         .iter()
         .map(|dir| home.join(dir))
         .collect();
-    let run =
-        Run { name: "OpenCode", program, verified, args, envs, data_dirs, stdin: styles::build_single(style, text) };
+    let run = Run { name: "OpenCode", program, verified, args, envs, data_dirs, stdin: prompt };
     cli::execute(run, &workdir, text, cancel, home)
 }

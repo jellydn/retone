@@ -2,8 +2,7 @@
 //! Spike S6: Pi 1.5.2 wrote nothing under `~/.pi/agent` in 5 of 5 runs.
 
 use super::cli::{self, Run, WorkDir};
-use super::{Cancel, Outcome};
-use crate::styles::{self, Style};
+use super::{Cancel, ErrorKind, Failure, Outcome};
 use std::ffi::OsString;
 use std::path::Path;
 
@@ -11,20 +10,21 @@ use std::path::Path;
 pub const VERIFIED: &[&str] = &["1.5.2", "1.6.0", "1.6.1"];
 
 /// `verified` is [`VERIFIED`] in the app; only `retone --cli-check` passes the installed version, to test it.
+/// `prompt` goes on stdin; `text` is the selection, for the answer cap and redaction.
 pub fn rewrite(
     verified: &[&str],
     program: &Path,
     model: &str,
-    style: &Style,
+    prompt: String,
     text: &str,
     cancel: &Cancel,
     home: &Path,
 ) -> Outcome {
-    let fail = |error: String| Outcome { answer: Err(error), wrote_files: None };
+    let fail = |error: Failure| Outcome { answer: Err(error), wrote_files: None };
     if let Err(error) = cli::check_model("Pi", model) {
-        return fail(error);
+        return fail(Failure::new(ErrorKind::Setup, error));
     }
-    let Ok(workdir) = WorkDir::new() else { return fail(t!("provider.temp_folder").into()) };
+    let Ok(workdir) = WorkDir::new() else { return fail(Failure::new(ErrorKind::Other, t!("provider.temp_folder"))) };
     let args = [
         "-p",
         "--no-session",
@@ -47,7 +47,7 @@ pub fn rewrite(
         args,
         envs: vec![("PI_OFFLINE", "1".into())],
         data_dirs: vec![home.join(".pi/agent/sessions")],
-        stdin: styles::build_single(style, text),
+        stdin: prompt,
     };
     cli::execute(run, &workdir, text, cancel, home)
 }

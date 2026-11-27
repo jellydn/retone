@@ -8,7 +8,7 @@
 //! An optional API key (llama-server `--api-key`) is sent as a Bearer token; it lives in the
 //! Keychain, never in prefs. Retone stores no text (the server may log on its side).
 
-use super::{Cancel, DEADLINE, answer_cap};
+use super::{Cancel, DEADLINE, ErrorKind, Failure, Retry, answer_cap};
 use crate::i18n::Key;
 use crate::styles::{self, Style};
 use serde_json::{Value, json};
@@ -66,6 +66,12 @@ pub fn recommended_id(model: &Recommended, endpoint: &str) -> String {
     let ollama = endpoint.trim_end_matches('/').ends_with(":11434/v1");
     if ollama { format!("hf.co/{}", model.id) } else { model.id.to_string() }
 }
+/// Low, so a rewrite stays close to the text and the same text gives about the same answer.
+const TEMPERATURE: f64 = 0.2;
+/// A Retry asks for another answer: at the low temperature with the same prompt, llama-server
+/// gives the same one again.
+const RETRY_TEMPERATURE: f64 = 0.8;
+
 /// Largest response body read, far above any capped answer; protects against a broken server.
 const BODY_LIMIT: u64 = 1024 * 1024;
 
@@ -212,52 +218,63 @@ pub fn list_models(endpoint: &str, allow_network: bool, key: Option<&ApiKey>) ->
     if let Some(ApiKey(key)) = key {
         request = request.header("Authorization", format!("Bearer {key}"));
     }
-    let mut response = request.call().map_err(|e| unreachable_message(&e))?;
+    let mut response = request.call().map_err(|e| unreachable_failure(&e).message)?;
     let status = response.status();
-    let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
+    let body: Value =
+        response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer().message)?;
     if !status.is_success() {
         return Err(status_message(status, &body));
     }
-    let models = body["data"].as_array().ok_or_else(bad_answer)?;
+    let models = body["data"].as_array().ok_or_else(|| bad_answer().message)?;
     Ok(models.iter().filter_map(|model| model["id"].as_str().map(str::to_string)).collect())
 }
 
 /// One rewrite, streamed: `on_partial` gets all text so far after each chunk, and a cancel stops
 /// reading at the next chunk. A server that ignores `stream` and sends one JSON answer still works.
+// Each argument is one input of this request; a struct for them would be built in one place only.
+#[allow(clippy::too_many_arguments)]
 pub fn rewrite(
     endpoint: &str,
     model: &str,
     key: Option<&ApiKey>,
     style: &Style,
     text: &str,
+    retry: Option<&Retry>,
     cancel: &Cancel,
     on_partial: &dyn Fn(&str),
-) -> Result<String, String> {
+) -> Result<String, Failure> {
     // The opt-in was checked when the provider was built from the saved settings; this check
     // still refuses public addresses, and the resolver checks the addresses themselves.
-    let endpoint = validate_endpoint(endpoint, true)?;
-    let prompt = styles::build(style, text);
-    let body = json!({
+    let endpoint = validate_endpoint(endpoint, true).map_err(|error| Failure::new(ErrorKind::Setup, error))?;
+    let prompt = styles::build(style, text, retry.and_then(|retry| retry.previous.as_deref()));
+    let mut body = json!({
         "model": model,
         "stream": true,
-        "temperature": 0.2,
+        "temperature": TEMPERATURE,
         // A model that thinks first took 5 to 50 s a rewrite, and Retone shows only the answer.
         // llama-server and Ollama turn thinking off for "none"; other servers ignore it.
         "reasoning_effort": "none",
         "messages": messages(&prompt),
     });
+    if retry.is_some() {
+        body["temperature"] = json!(RETRY_TEMPERATURE);
+        // llama-server and Ollama read `seed`; a new one each time, so two retries differ too.
+        body["seed"] = json!(new_seed());
+    }
     let mut request = agent(&endpoint).post(format!("{endpoint}/chat/completions"));
     if let Some(ApiKey(key)) = key {
         request = request.header("Authorization", format!("Bearer {key}"));
     }
-    let mut response = request.send_json(&body).map_err(|e| unreachable_message(&e))?;
+    let mut response = request.send_json(&body).map_err(|e| unreachable_failure(&e))?;
     let status = response.status();
     let streamed = response.body().mime_type() == Some("text/event-stream");
     if !status.is_success() || !streamed {
-        let body: Value = response.body_mut().with_config().limit(BODY_LIMIT).read_json().map_err(|_| bad_answer())?;
+        let body = response.body_mut().with_config().limit(BODY_LIMIT).read_json::<Value>();
         if !status.is_success() {
-            return Err(status_message(status, &body));
+            // A proxy or server can send an HTML error page; the status still says what to fix.
+            return Err(status_failure(status, &body.unwrap_or(Value::Null)));
         }
+        let body = body.map_err(|_| bad_answer())?;
         let answer = body["choices"][0]["message"]["content"].as_str().ok_or_else(bad_answer)?;
         return finish(answer, text);
     }
@@ -265,9 +282,9 @@ pub fn rewrite(
     let mut answer = String::new();
     for line in reader.lines() {
         if cancel.is_cancelled() {
-            return Err(t!("provider.cancelled").into());
+            return Err(Failure::cancelled());
         }
-        let line = line.map_err(|_| t!("local.stopped").to_string())?;
+        let line = line.map_err(|_| Failure::new(ErrorKind::Unreachable, t!("local.stopped")))?;
         // Other lines are SSE comments, event names or blank separators.
         let Some(data) = line.strip_prefix("data:").map(str::trim) else { continue };
         if data == "[DONE]" {
@@ -275,13 +292,13 @@ pub fn rewrite(
         }
         let chunk: Value = serde_json::from_str(data).map_err(|_| bad_answer())?;
         if chunk.get("error").is_some() {
-            return Err(status_message(status, &chunk));
+            return Err(status_failure(status, &chunk));
         }
         if let Some(delta) = chunk["choices"][0]["delta"]["content"].as_str() {
             answer.push_str(delta);
             // Stop a runaway model early instead of after the whole answer arrived.
             if answer.chars().count() > answer_cap(text) {
-                return Err(t!("provider.too_long").into());
+                return Err(Failure::too_long(styles::clean_answer(&answer)));
             }
             on_partial(&answer);
         }
@@ -289,12 +306,18 @@ pub fn rewrite(
     finish(&answer, text)
 }
 
-fn finish(answer: &str, text: &str) -> Result<String, String> {
+fn finish(answer: &str, text: &str) -> Result<String, Failure> {
     let answer = styles::clean_answer(answer);
     if answer.chars().count() > answer_cap(text) {
-        return Err(t!("provider.too_long").into());
+        return Err(Failure::too_long(answer));
     }
     Ok(answer)
+}
+
+/// A seed that differs between retries. Not for security: it only picks another sample.
+fn new_seed() -> u32 {
+    let nanos = rune_core::time::system_now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    nanos ^ std::process::id()
 }
 
 /// System, then the style's example as an earlier user/assistant turn, then the real text. Ollama
@@ -319,6 +342,12 @@ fn status_message(status: ureq::http::StatusCode, body: &Value) -> String {
     t!("local.status", status = status, detail = detail)
 }
 
+/// A wrong API key is fixed in Settings; another status (such as "Loading model") may pass.
+fn status_failure(status: ureq::http::StatusCode, body: &Value) -> Failure {
+    let kind = if status.as_u16() == 401 { ErrorKind::Setup } else { ErrorKind::Other };
+    Failure::new(kind, status_message(status, body))
+}
+
 /// A model ID for display: llama-server reports the GGUF file path, so only its file name is
 /// shown. Other IDs stay whole, as `hf.co/user/model:q4` (Ollama) names a different model.
 pub fn short_model_name(model: &str) -> &str {
@@ -328,20 +357,22 @@ pub fn short_model_name(model: &str) -> &str {
     model.rsplit('/').next().filter(|name| !name.is_empty()).unwrap_or(model)
 }
 
-fn unreachable_message(error: &ureq::Error) -> String {
+fn unreachable_failure(error: &ureq::Error) -> Failure {
     match error {
-        ureq::Error::Timeout(_) => t!("provider.timeout", seconds = DEADLINE.as_secs()),
-        ureq::Error::ConnectionFailed | ureq::Error::Io(_) | ureq::Error::HostNotFound => {
-            t!("local.unreachable").into()
+        ureq::Error::Timeout(_) => {
+            Failure::new(ErrorKind::Timeout, t!("provider.timeout", seconds = DEADLINE.as_secs()))
         }
-        ureq::Error::Other(_) => t!("local.not_private").into(),
-        ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => t!("local.tls").into(),
-        _ => t!("local.failed").into(),
+        ureq::Error::ConnectionFailed | ureq::Error::Io(_) | ureq::Error::HostNotFound => {
+            Failure::new(ErrorKind::Unreachable, t!("local.unreachable"))
+        }
+        ureq::Error::Other(_) => Failure::new(ErrorKind::Setup, t!("local.not_private")),
+        ureq::Error::NativeTls(_) | ureq::Error::Tls(_) => Failure::new(ErrorKind::Setup, t!("local.tls")),
+        _ => Failure::new(ErrorKind::Other, t!("local.failed")),
     }
 }
 
-fn bad_answer() -> String {
-    t!("local.bad_answer").into()
+fn bad_answer() -> Failure {
+    Failure::new(ErrorKind::Other, t!("local.bad_answer"))
 }
 
 #[cfg(test)]

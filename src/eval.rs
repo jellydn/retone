@@ -158,7 +158,7 @@ fn run(args: &[String]) -> Result<bool, String> {
                 first.set(Some(start.elapsed()));
             }
         };
-        let Outcome { answer, .. } = provider.rewrite(style, text, &Cancel::default(), &env, &on_partial);
+        let Outcome { answer, .. } = provider.rewrite(style, text, None, &Cancel::default(), &env, &on_partial);
         let total = start.elapsed();
         // A server that does not stream sends the whole answer at once.
         let first = first.get().unwrap_or(total);

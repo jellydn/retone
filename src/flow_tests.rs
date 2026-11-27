@@ -1,4 +1,5 @@
 use super::*;
+use crate::provider::{ErrorKind, Failure, Retry};
 
 fn effects(e: Effects<Effect>) -> Vec<Effect> {
     e.into_iter().collect()
@@ -64,7 +65,10 @@ fn cancel_and_failures_never_apply_or_copy() {
 
     let attempt2 = start(&mut flow, "text");
     assert_ne!(attempt, attempt2);
-    flow.step(Event::Answer { attempt: attempt2, result: Err("Timed out after 60 s".into()) });
+    flow.step(Event::Answer {
+        attempt: attempt2,
+        result: Err(Failure::new(ErrorKind::Timeout, "Timed out after 60 s")),
+    });
     assert!(!applies(&effects(flow.step(Event::Replace))), "no Replace on a failed preview");
     assert!(!applies(&effects(flow.step(Event::Copy))));
     assert_eq!(effects(flow.step(Event::Cancel)), vec![Effect::ClosePopup]);
@@ -236,4 +240,46 @@ fn a_streaming_preview_offers_no_replace_or_copy_until_the_answer_ends() {
         vec![Effect::CancelRequest, Effect::ClosePopup],
         "Esc stops the stream"
     );
+}
+
+fn requested_retry(out: &[Effect]) -> Option<Retry> {
+    match out.last() {
+        Some(Effect::Request { retry, .. }) => retry.clone(),
+        other => panic!("expected Request, got {other:?}"),
+    }
+}
+
+#[test]
+fn only_a_retry_asks_for_another_answer_and_it_shows_the_last_complete_one() {
+    let mut flow = Flow::new(Style::Clear);
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Ok("First.".into()) });
+    let out = effects(flow.step(Event::Retry));
+    assert_eq!(requested_retry(&out), Some(Retry { previous: Some("First.".into()) }));
+
+    // A failure has no answer to move away from, but the retry still samples anew.
+    let State::Previewing { attempt, .. } = flow.state else { panic!("previewing") };
+    flow.step(Event::Answer { attempt, result: Err(Failure::new(ErrorKind::Empty, "none")) });
+    assert_eq!(requested_retry(&effects(flow.step(Event::Retry))), Some(Retry { previous: None }));
+
+    // A new style is a first try in that style.
+    assert_eq!(requested_retry(&effects(flow.step(Event::ChangeStyle(Style::Fix)))), None);
+}
+
+#[test]
+fn a_dropped_answer_is_shown_only_on_request_and_only_for_copy() {
+    let mut flow = Flow::new(Style::Bullets);
+    let attempt = start(&mut flow, "a request with a link");
+    flow.step(Event::Answer { attempt, result: Err(Failure::too_long("- An answer.".into())) });
+    assert!(!applies(&effects(flow.step(Event::Copy))), "nothing to copy before Show answer");
+    flow.step(Event::ShowDropped);
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Dropped(_), can_replace: false, .. }));
+    assert!(!applies(&effects(flow.step(Event::Replace))), "never Replace with a dropped answer");
+    assert_eq!(effects(flow.step(Event::Copy)), vec![Effect::CopyText("- An answer.".into()), Effect::ClosePopup]);
+
+    // Other failures have no answer to show.
+    let attempt = start(&mut flow, "text");
+    flow.step(Event::Answer { attempt, result: Err(Failure::new(ErrorKind::Timeout, "slow")) });
+    flow.step(Event::ShowDropped);
+    assert!(matches!(&flow.state, State::Previewing { phase: Phase::Failed(_), .. }));
 }

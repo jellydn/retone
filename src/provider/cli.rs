@@ -5,7 +5,7 @@
 //! the whole process group, and a cheap guard that compares the CLI's data folders before and
 //! after the run. Retone never deletes the CLI's own files.
 
-use super::{Cancel, DEADLINE, Outcome, answer_cap, redact};
+use super::{Cancel, DEADLINE, ErrorKind, Failure, Outcome, answer_cap};
 use crate::styles;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -80,32 +80,34 @@ pub fn execute(run: Run, workdir: &WorkDir, text: &str, cancel: &Cancel, home: &
     let before = snapshot(&run.data_dirs);
     let answer = version_then_rewrite(&run, workdir, text, cancel);
     let wrote_files = changed_dir(&before, &snapshot(&run.data_dirs));
-    let answer = answer.map_err(|error| redact(&error, text, home.to_str()));
+    let answer = answer.map_err(|failure| failure.redacted(text, home.to_str()));
     Outcome { answer, wrote_files }
 }
 
-fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cancel) -> Result<String, String> {
+fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cancel) -> Result<String, Failure> {
+    let setup = |message: String| Failure::new(ErrorKind::Setup, message);
     let version_args = vec![OsString::from("--version")];
     let supported = if run.verified.is_empty() {
         t!("cli.none_verified", name = run.name)
     } else {
         t!("cli.supported", name = run.name, verified = run.verified.join(", "))
     };
-    let not_verified = |found: &str| t!("cli.not_verified", name = run.name, found = found, supported = supported);
+    let not_verified =
+        |found: &str| setup(t!("cli.not_verified", name = run.name, found = found, supported = supported));
     let version = match spawn_and_wait(run, workdir, &version_args, "", cancel, VERSION_DEADLINE, usize::MAX) {
         Ok(output) => parse_version(&output).ok_or_else(|| not_verified(t!("cli.unknown_version")))?,
-        Err(Failure::Cancelled) => return Err(t!("provider.cancelled").into()),
-        Err(Failure::Spawn) => return Err(t!("cli.not_found", name = run.name)),
+        Err(RunError::Cancelled) => return Err(Failure::cancelled()),
+        Err(RunError::Spawn) => return Err(setup(t!("cli.not_found", name = run.name))),
         // Found but broken (a missing `node`, a plugin that crashes): say what it printed.
-        Err(Failure::Exited(stderr)) => {
-            return Err(t!("cli.version_failed", name = run.name, error = last_error_line(&stderr)));
+        Err(RunError::Exited(stderr)) => {
+            return Err(setup(t!("cli.version_failed", name = run.name, error = last_error_line(&stderr))));
         }
-        Err(Failure::TimedOut) => {
-            return Err(t!(
+        Err(RunError::TimedOut) => {
+            return Err(setup(t!(
                 "cli.version_failed",
                 name = run.name,
                 error = t!("provider.timeout", seconds = VERSION_DEADLINE.as_secs())
-            ));
+            )));
         }
     };
     if !run.verified.contains(&version.as_str()) {
@@ -116,17 +118,21 @@ fn version_then_rewrite(run: &Run, workdir: &WorkDir, text: &str, cancel: &Cance
         Ok(output) => {
             let answer = styles::clean_answer(&strip_ansi(&output));
             if answer.is_empty() {
-                Err(t!("cli.no_text", name = run.name))
+                Err(Failure::new(ErrorKind::Empty, t!("cli.no_text", name = run.name)))
             } else if answer.chars().count() > answer_cap(text) {
-                Err(t!("provider.too_long").into())
+                Err(Failure::too_long(answer))
             } else {
                 Ok(answer)
             }
         }
-        Err(Failure::Cancelled) => Err(t!("provider.cancelled").into()),
-        Err(Failure::TimedOut) => Err(t!("provider.timeout", seconds = DEADLINE.as_secs())),
-        Err(Failure::Exited(stderr)) => Err(t!("cli.failed", name = run.name, error = last_error_line(&stderr))),
-        Err(Failure::Spawn) => Err(t!("cli.not_found", name = run.name)),
+        Err(RunError::Cancelled) => Err(Failure::cancelled()),
+        Err(RunError::TimedOut) => {
+            Err(Failure::new(ErrorKind::Timeout, t!("provider.timeout", seconds = DEADLINE.as_secs())))
+        }
+        Err(RunError::Exited(stderr)) => {
+            Err(Failure::new(ErrorKind::Other, t!("cli.failed", name = run.name, error = last_error_line(&stderr))))
+        }
+        Err(RunError::Spawn) => Err(setup(t!("cli.not_found", name = run.name))),
     }
 }
 
@@ -149,7 +155,7 @@ pub fn installed_version(program: &Path) -> Option<String> {
     parse_version(&output)
 }
 
-enum Failure {
+enum RunError {
     Spawn,
     Cancelled,
     TimedOut,
@@ -164,7 +170,7 @@ fn spawn_and_wait(
     cancel: &Cancel,
     deadline: Duration,
     stdout_limit: usize,
-) -> Result<String, Failure> {
+) -> Result<String, RunError> {
     let login = super::login_path::login_path();
     let program = super::login_path::locate(run.program, login);
     let mut command = Command::new(&program);
@@ -181,7 +187,7 @@ fn spawn_and_wait(
         .stderr(Stdio::piped())
         // Own process group, so cancel also stops helpers the CLI starts (OpenCode's server).
         .process_group(0);
-    let mut child = command.spawn().map_err(|_| Failure::Spawn)?;
+    let mut child = command.spawn().map_err(|_| RunError::Spawn)?;
     let stdout = reader(child.stdout.take(), stdout_limit);
     let stderr = reader(child.stderr.take(), STDERR_LIMIT);
     if let Some(mut pipe) = child.stdin.take() {
@@ -196,17 +202,17 @@ fn spawn_and_wait(
             Ok(None) if cancel.is_cancelled() => break None,
             Ok(None) if started.elapsed() > deadline => {
                 kill_group(&mut child);
-                return Err(Failure::TimedOut);
+                return Err(RunError::TimedOut);
             }
             Ok(None) => sleep(Duration::from_millis(20)),
             Err(_) => break None,
         }
     };
     kill_group(&mut child);
-    let Some(status) = status else { return Err(Failure::Cancelled) };
+    let Some(status) = status else { return Err(RunError::Cancelled) };
     let out = stdout.join().unwrap_or_default();
     let err = stderr.join().unwrap_or_default();
-    if status.success() { Ok(out) } else { Err(Failure::Exited(err)) }
+    if status.success() { Ok(out) } else { Err(RunError::Exited(err)) }
 }
 
 /// Reads a pipe to the end, keeping at most `limit` bytes; the rest is drained so the child
