@@ -60,13 +60,36 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 
 ## Screenshots
 
+**Popup**: the preview streams in, press 6 for **More** styles, click the provider label (or ⌘P) to switch model. First use of a provider asks for consent.
+
 <div align="center">
-  <img src="docs/screenshots/tldr-example.png" alt="TL;DR of a long selection: a title line, the main point, key takeaways and a closing line" width="440"/>
+  <img src="docs/screenshots/streaming-example.png" alt="The rewrite streams in; Copy and Replace turn on when it is complete" width="380"/>
+  <img src="docs/screenshots/more-example.png" alt="More: the other styles and your own" width="380"/>
   <br/>
+  <img src="docs/screenshots/provider-picker.png" alt="Provider picker: local models and a Pi model" width="380"/>
   <img src="docs/screenshots/consent-example.png" alt="First-use consent for a provider" width="380"/>
-  <img src="docs/screenshots/no-permission-example.png" alt="Clipboard mode without Accessibility" width="380"/>
   <br/>
-  <img src="docs/screenshots/settings-provider-local.png" alt="Settings: local provider" width="520"/>
+  <img src="docs/screenshots/tldr-example.png" alt="TL;DR of a long selection: a title line, the main point, key takeaways and a closing line" width="380"/>
+</div>
+
+**Errors say how to fix them**, with buttons for the next step.
+
+<div align="center">
+  <img src="docs/screenshots/error-unreachable-example.png" alt="Error hint: cannot reach the local server, with Open Settings, Switch model and Retry" width="380"/>
+  <img src="docs/screenshots/error-setup-example.png" alt="Error hint: an unverified CLI version, with Switch model, Retry and Open Settings" width="380"/>
+  <br/>
+  <img src="docs/screenshots/dropped-example.png" alt="An answer far longer than the text is dropped; only Copy is offered" width="380"/>
+  <img src="docs/screenshots/no-permission-example.png" alt="Clipboard mode without Accessibility" width="380"/>
+</div>
+
+**Settings**: General, Provider and Styles.
+
+<div align="center">
+  <img src="docs/screenshots/settings-general.png" alt="Settings: General, with the shortcut, theme, Accessibility and right-click menu rows" width="520"/>
+  <br/>
+  <img src="docs/screenshots/settings-provider-local.png" alt="Settings: local provider with address, API key and models" width="520"/>
+  <br/>
+  <img src="docs/screenshots/settings-styles.png" alt="Settings: Styles, with the custom style and one shortcut per style" width="520"/>
 </div>
 
 ## Installation
