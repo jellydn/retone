@@ -26,7 +26,7 @@
 
 ## Installation Requirements
 
-- macOS 14 or later on Apple Silicon (tested on macOS 27 only)
+- macOS 14 or later on Apple Silicon (tested on macOS 26.6 and 27.2 only)
 - One AI provider: a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp, [Llama.app](https://llama.app)), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), Claude Code or Codex
 
 > [!IMPORTANT]
@@ -56,7 +56,7 @@ Good writing tools often live in one app, or send your text to a cloud you did n
 - 🧰 **CLI providers**: Pi, OpenCode, Claude Code and Codex, run with no sessions, no tools and no history
 - 🔒 **No history**: the 2,000-character input limit, no text in logs, settings store no text
 - 🎨 **Themes**: System, Dark, Light, or Kanagawa Lotus
-- 🔄 **Updates**: Homebrew (`brew upgrade`), or Sparkle in builds signed for it
+- 🔄 **Updates**: no automatic updates in this beta; run `brew upgrade --cask retone`, or download the new DMG from [Releases](https://github.com/jellydn/retone/releases). Settings shows how your copy updates
 
 ## Screenshots
 
@@ -176,12 +176,12 @@ You can also give a Services item a keyboard shortcut in the same System Setting
 
 Settings has a sidebar of pages. Each page is one card of rows, with rarely used settings under **Advanced**. The sidebar footer shows **What's new**, the version, and how this copy updates.
 
-| Page     | What it does                                                                                                                            |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| General  | Record the global hotkey and test it, default style, theme, Accessibility status, and **Launch at login**.                              |
-| Provider | Choose Local AI, Pi, OpenCode, Claude Code or Codex. For Local AI: address (with presets), LAN and Tailscale switch, API key and model. |
-| Styles   | Default style and your custom instruction.                                                                                              |
-| Privacy  | The no-history rules, **Revoke all** consent, and turning an adapter on again after the guard.                                          |
+| Page     | What it does                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| General  | Record the global hotkey and test it, default style, theme, Accessibility status, **Launch at login** and the **Right-click menu** switch. |
+| Provider | Choose Local AI, Pi, OpenCode, Claude Code or Codex. For Local AI: address (with presets), LAN and Tailscale switch, API key and model.    |
+| Styles   | Default style, your custom instruction, and an optional shortcut per style.                                                                |
+| Privacy  | The no-history rules, **Revoke all** consent, and turning an adapter on again after the guard.                                             |
 
 ## Providers and the no-history rules
 
@@ -247,12 +247,15 @@ Rules for every CLI provider:
 
 ## Known limits
 
-This beta is tested on macOS 27.2 on Apple Silicon only.
+This beta is tested on macOS 26.6 and 27.2 on Apple Silicon only.
 
-- Tested apps: Slack (popup and reading work; replace has a fix that still needs a retest). TextEdit, Safari, Chrome, VS Code, Terminal and others are not tested yet.
+- **Tested apps**: TextEdit (popup, Replace and the right-click menu) and Slack (popup and reading work; replace has a fix that still needs a retest). Safari, Chrome, VS Code, Terminal and others are not tested yet.
+- **Not tested in a real app yet**, only with unit tests and rendered scenes: the error buttons and **Show answer** (beta.16), the TL;DR right-click item and the **More** list (beta.15), and a right-click request while the switch is off (beta.17).
 - macOS 14 and 15, Intel Macs, displays with mixed scaling, and non-US keyboard layouts are not tested.
-- The Accessibility grant does not survive updates (ad hoc signing).
-- OpenCode with free hosted models is not tested.
+- **No automatic updates**: releases are ad hoc signed and have no Sparkle key, so Retone does not update itself. Update with `brew update && brew upgrade --cask retone`, or download the new DMG.
+- **Accessibility after an update**: the grant does not survive an update (ad hoc signing). The switch can show on but not work: remove Retone in **System Settings → Privacy & Security → Accessibility**, add it again, then open Retone again. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+- **Right-click menu**: macOS does not let Retone hide its own Services items; the switch in Settings makes Retone ignore them. Many Electron apps (Slack, VS Code, Discord) do not show Services at all.
+- **Codex** is not verified for no-history use yet, so Retone refuses it. OpenCode with free hosted models is not tested.
 
 ## 📝 Documentation
 
