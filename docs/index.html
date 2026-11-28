@@ -125,7 +125,7 @@
         {
           "@type": "Question",
           "name": "What do I need to run Retone?",
-          "acceptedAnswer": { "@type": "Answer", "text": "macOS 14 or later on Apple Silicon and one AI provider: a local OpenAI-compatible server or one of the supported AI CLIs. Version 0.1 is a beta tested mainly on macOS 27 with Slack; other apps and macOS versions are not yet verified." }
+          "acceptedAnswer": { "@type": "Answer", "text": "macOS 14 or later on Apple Silicon and one AI provider: a local OpenAI-compatible server or one of the supported AI CLIs. Version 0.1 is a beta tested on macOS 26.6 and 27.2, in TextEdit and Slack; other apps and macOS versions are not yet verified. It has no automatic updates: use brew upgrade --cask retone or download the new DMG." }
         }
       ]
     }
@@ -205,7 +205,7 @@
               <span class="h-2.5 w-2.5 rounded-full bg-brand-blue/20" aria-hidden="true"></span>
               <span class="ml-3 text-xs text-subtle">The rewrite popup</span>
             </div>
-            <img src="screenshots/preview-example.png" alt="Retone popup showing a rewrite preview with style tabs and Copy and Replace buttons" class="block w-full" width="900" height="594" fetchpriority="high">
+            <img src="screenshots/preview-example.png" alt="Retone popup showing a rewrite preview with style tabs and Copy and Replace buttons" class="block w-full" width="880" height="600" fetchpriority="high">
           </div>
           <p class="mt-3 text-center text-xs text-subtle">Preview first. Nothing changes until you press Replace.</p>
         </div>
@@ -293,16 +293,32 @@
       </div>
       <div class="mt-10 grid gap-6 lg:grid-cols-2">
         <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
-          <img src="screenshots/provider-picker.png" alt="Retone provider picker showing local models and a Pi model" class="block w-full" width="900" height="594" loading="lazy">
+          <img src="screenshots/streaming-example.png" alt="Retone popup streaming a rewrite, with Copy and Replace off until it is complete" class="block w-full" width="880" height="600" loading="lazy">
+          <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">The rewrite streams in. Copy and Replace turn on when it is complete.</figcaption>
+        </figure>
+        <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
+          <img src="screenshots/more-example.png" alt="Retone More list with Concise, Professional, Technical, Simplify, Expand and Custom styles" class="block w-full" width="880" height="600" loading="lazy">
+          <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">Five styles in one row; press 6 for More and your own instruction.</figcaption>
+        </figure>
+        <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
+          <img src="screenshots/provider-picker.png" alt="Retone provider picker showing local models and a Pi model" class="block w-full" width="880" height="600" loading="lazy">
           <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">Switch provider or model without leaving the popup.</figcaption>
         </figure>
         <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
-          <img src="screenshots/settings-provider-local.png" alt="Retone Settings page for a local AI provider with address, network and API key options" class="block w-full" width="1562" height="900" loading="lazy">
+          <img src="screenshots/settings-provider-local.png" alt="Retone Settings page for a local AI provider with address, network and API key options" class="block w-full" width="1640" height="1120" loading="lazy">
           <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">Local servers stay on this Mac unless you opt in to LAN or Tailscale.</figcaption>
+        </figure>
+        <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
+          <img src="screenshots/error-unreachable-example.png" alt="Retone error hint: cannot reach the local server, with Open Settings, Switch model and Retry buttons" class="block w-full" width="880" height="600" loading="lazy">
+          <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">Errors say how to fix them, with a button for the next step.</figcaption>
+        </figure>
+        <figure class="overflow-hidden rounded-2xl border border-line bg-surface">
+          <img src="screenshots/settings-general.png" alt="Retone Settings General page with the shortcut, theme, Accessibility and right-click menu rows" class="block w-full" width="1640" height="1120" loading="lazy">
+          <figcaption class="border-t border-line px-5 py-4 text-sm text-subtle">Record your hotkey and test it. Turn the right-click menu on or off.</figcaption>
         </figure>
         <figure class="lg:col-span-2">
           <div class="overflow-hidden rounded-2xl border border-line bg-surface">
-            <img src="screenshots/consent-example.png" alt="Retone consent dialog asking permission to send selected text to an AI provider" class="block w-full max-w-2xl" width="900" height="594" loading="lazy">
+            <img src="screenshots/consent-example.png" alt="Retone consent dialog asking permission to send selected text to an AI provider" class="block w-full max-w-2xl" width="880" height="600" loading="lazy">
           </div>
           <figcaption class="mt-4 text-center text-sm text-subtle">One consent per provider and model. Revoke it any time in Settings → Privacy.</figcaption>
         </figure>
@@ -396,7 +412,7 @@ brew install --cask retone</code></pre>
           </div>
           <div class="min-w-0 rounded-2xl border border-line bg-canvas p-6">
             <h3 class="font-semibold">Direct download</h3>
-            <p class="mt-2 text-sm leading-relaxed text-subtle">Get the DMG or ZIP from Releases. Betas are marked Pre-release.</p>
+            <p class="mt-2 text-sm leading-relaxed text-subtle">Get the DMG or ZIP from Releases. Betas are marked Pre-release. The beta does not update itself: download the new DMG to update.</p>
             <a href="https://github.com/jellydn/retone/releases/latest" class="mt-5 inline-block rounded-lg bg-brand-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-bluedark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue">Open Releases</a>
             <p class="mt-4 text-xs leading-relaxed text-subtle">Optional: download SHA256SUMS to the same folder and check the file with <code class="rounded bg-cream px-1">shasum -a 256 -c SHA256SUMS --ignore-missing</code>.</p>
           </div>
@@ -404,12 +420,12 @@ brew install --cask retone</code></pre>
             <h3 class="font-semibold">First launch</h3>
             <p class="mt-2 text-sm leading-relaxed text-ink">Retone is ad-hoc signed, not signed with an Apple Developer certificate. macOS may say it cannot be opened.</p>
             <p class="mt-3 text-sm leading-relaxed text-ink">Open <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>, or run <code class="rounded bg-surface px-1">xattr -dr com.apple.quarantine /Applications/Retone.app</code>.</p>
-            <p class="mt-4 text-xs text-subtle">Grant Accessibility in System Settings to replace text in place. Without it, Retone works in clipboard mode. Re-grant the permission after an update.</p>
+            <p class="mt-4 text-xs text-subtle">Grant Accessibility in System Settings to replace text in place. Without it, Retone works in clipboard mode. Grant it again after each update: remove Retone in the list, then add it again.</p>
             <a href="https://github.com/jellydn/retone/blob/main/TROUBLESHOOTING.md" class="mt-4 inline-block text-sm font-semibold text-brand-link underline underline-offset-2 hover:text-brand-bluedark">Troubleshooting guide →</a>
           </div>
         </div>
         <p class="mt-8 rounded-xl border border-line px-5 py-4 text-sm text-subtle">
-          <strong class="text-ink">Beta note:</strong> tested on macOS 27 with Apple Silicon, mainly in Slack. Other apps, macOS 14/15, Intel Macs, mixed-scaling displays and non-US keyboards are not verified yet.
+          <strong class="text-ink">Beta note:</strong> tested on macOS 26.6 and 27.2 with Apple Silicon, in TextEdit and Slack. Other apps, macOS 14/15, Intel Macs, mixed-scaling displays and non-US keyboards are not verified yet. No automatic updates yet, and Accessibility must be granted again after each update.
         </p>
       </div>
     </section>
@@ -437,7 +453,7 @@ brew install --cask retone</code></pre>
         </details>
         <details class="group py-5">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold marker:content-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-blue">What do I need to run Retone?<svg class="h-5 w-5 shrink-0 text-brand-link transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-          <p class="mt-3 max-w-2xl text-sm leading-relaxed text-subtle">macOS 14 or later on Apple Silicon and one AI provider: a local OpenAI-compatible server or one of the supported AI CLIs. Version 0.1 is a beta tested mainly on macOS 27 with Slack; other apps and macOS versions are not yet verified.</p>
+          <p class="mt-3 max-w-2xl text-sm leading-relaxed text-subtle">macOS 14 or later on Apple Silicon and one AI provider: a local OpenAI-compatible server or one of the supported AI CLIs. Version 0.1 is a beta tested on macOS 26.6 and 27.2, in TextEdit and Slack; other apps and macOS versions are not yet verified. It has no automatic updates: use brew upgrade --cask retone or download the new DMG.</p>
         </details>
       </div>
     </section>
